@@ -2,26 +2,51 @@
   "name": "mendeleev",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
+  "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
-    "tauri": "tauri"
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "start": "electron-vite preview",
+    "package": "electron-vite build && electron-builder",
+    "package:mac": "electron-vite build && electron-builder --mac",
+    "rebuild": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2",
+    "better-sqlite3": "^11.3.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.4",
-    "@tauri-apps/cli": "^2",
+    "@types/better-sqlite3": "^7.6.11",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "electron-rebuild": "^3.2.9",
+    "electron-vite": "^3.1.0",
     "tailwindcss": "^4.2.4",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^6.0.0"
+  },
+  "build": {
+    "appId": "com.piumra.mendeleev",
+    "productName": "Mendeleev",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-electron/**",
+      "dist/**"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    }
   }
 }
