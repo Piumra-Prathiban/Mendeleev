@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNotes } from "./hooks/useNotes";
 import type { Note } from "./types";
 
@@ -10,6 +11,7 @@ function confirmDelete(note: Note | undefined) {
 function App() {
   const { notes, selected, selectedId, loading, select, create, update, remove } =
     useNotes();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const handleRemove = (id: string) => {
     const note = notes.find((n) => n.id === id);
@@ -18,6 +20,17 @@ function App() {
 
   return (
     <div className="flex h-full w-full">
+      {sidebarCollapsed ? (
+        <div className="pl-20 pr-2 py-2 border-b border-neutral-200 dark:border-neutral-800 flex gap-2 [-webkit-app-region:drag] absolute top-0 left-0 right-0 z-10 bg-white dark:bg-neutral-950">
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(false)}
+            className="text-sm px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded [-webkit-app-region:no-drag]"
+          >
+            Expand
+          </button>
+        </div>
+      ) : (
       <aside
         aria-label="Notes list"
         className="w-[260px] shrink-0 border-r border-neutral-200 dark:border-neutral-800 flex flex-col"
@@ -39,6 +52,13 @@ function App() {
               Delete
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(true)}
+            className="text-sm px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded [-webkit-app-region:no-drag] ml-auto"
+          >
+            Collapse
+          </button>
         </div>
         <ul className="flex-1 overflow-auto">
           {loading && <li className="p-2 text-sm text-neutral-500">Loading…</li>}
@@ -73,17 +93,22 @@ function App() {
           ))}
         </ul>
       </aside>
-      <main aria-label="Editor" className="flex-1">
+      )}
+      <main aria-label="Editor" className="flex-1 relative">
         {selected ? (
           <textarea
             key={selected.id}
             defaultValue={selected.content}
             onBlur={(e) => update(selected.id, e.target.value)}
-            className="w-full h-full resize-none p-4 outline-none bg-transparent font-mono text-sm"
+            className={`w-full h-full resize-none p-4 outline-none bg-transparent font-mono text-sm ${
+              sidebarCollapsed ? "pt-14" : ""
+            }`}
             placeholder="# Title&#10;Body…"
           />
         ) : (
-          <div className="p-4 text-sm text-neutral-500">Select or create a note</div>
+          <div className={`p-4 text-sm text-neutral-500 ${sidebarCollapsed ? "pt-14" : ""}`}>
+            Select or create a note
+          </div>
         )}
       </main>
     </div>
