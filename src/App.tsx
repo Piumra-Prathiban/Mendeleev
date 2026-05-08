@@ -1,8 +1,20 @@
 import { useNotes } from "./hooks/useNotes";
+import type { Note } from "./types";
+
+function confirmDelete(note: Note | undefined) {
+  if (!note) return false;
+  const label = note.title || "Untitled";
+  return window.confirm(`Delete "${label}"? This cannot be undone.`);
+}
 
 function App() {
   const { notes, selected, selectedId, loading, select, create, update, remove } =
     useNotes();
+
+  const handleRemove = (id: string) => {
+    const note = notes.find((n) => n.id === id);
+    if (confirmDelete(note)) remove(id);
+  };
 
   return (
     <div className="flex h-full w-full">
@@ -21,7 +33,7 @@ function App() {
           {selectedId && (
             <button
               type="button"
-              onClick={() => remove(selectedId)}
+              onClick={() => handleRemove(selectedId)}
               className="text-sm px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded [-webkit-app-region:no-drag]"
             >
               Delete
@@ -34,17 +46,28 @@ function App() {
             <li className="p-2 text-sm text-neutral-500">No notes yet</li>
           )}
           {notes.map((n) => (
-            <li key={n.id}>
+            <li key={n.id} className="group relative">
               <button
                 type="button"
                 onClick={() => select(n.id)}
-                className={`w-full text-left px-3 py-2 text-sm truncate ${
+                className={`w-full text-left pl-3 pr-9 py-2 text-base font-medium truncate ${
                   n.id === selectedId
                     ? "bg-neutral-200 dark:bg-neutral-800"
                     : "hover:bg-neutral-100 dark:hover:bg-neutral-900"
                 }`}
               >
                 {n.title || "Untitled"}
+              </button>
+              <button
+                type="button"
+                aria-label={`Delete ${n.title || "Untitled"}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRemove(n.id);
+                }}
+                className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded text-neutral-500 hover:text-red-600 hover:bg-neutral-200 dark:hover:bg-neutral-700 opacity-0 group-hover:opacity-100 focus:opacity-100"
+              >
+                ×
               </button>
             </li>
           ))}
