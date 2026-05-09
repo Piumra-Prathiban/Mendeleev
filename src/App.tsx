@@ -52,9 +52,9 @@ function App() {
           <aside
             aria-label="Notes list"
             style={{ width: sidebarWidth }}
-            className="shrink-0 border-r border-neutral-200 dark:border-neutral-800 flex flex-col"
+            className="shrink-0 border-r border-neutral-200 dark:border-neutral-800 flex flex-col overflow-hidden"
           >
-            <div className="pl-20 pr-2 py-2 border-b border-neutral-200 dark:border-neutral-800 flex gap-2 [-webkit-app-region:drag]">
+            <div className="pl-20 pr-2 py-2 border-b border-neutral-200 dark:border-neutral-800 flex gap-2 min-w-0 [-webkit-app-region:drag]">
               <button
                 type="button"
                 onClick={() => create()}
@@ -71,13 +71,6 @@ function App() {
                   Delete
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => setSidebarCollapsed(true)}
-                className="text-sm px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded [-webkit-app-region:no-drag] ml-auto"
-              >
-                Collapse
-              </button>
             </div>
             <ul className="flex-1 overflow-auto">
               {loading && <li className="p-2 text-sm text-neutral-500">Loading…</li>}
@@ -123,17 +116,18 @@ function App() {
         </>
       )}
       <main aria-label="Editor" className="flex-1 flex flex-col min-w-0">
-        {sidebarCollapsed && (
-          <div className="pl-20 pr-2 py-2 border-b border-neutral-200 dark:border-neutral-800 flex gap-2 [-webkit-app-region:drag]">
-            <button
-              type="button"
-              onClick={() => setSidebarCollapsed(false)}
-              className="text-sm px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded [-webkit-app-region:no-drag]"
-            >
-              Expand
-            </button>
-          </div>
-        )}
+        <div
+          className={`${sidebarCollapsed ? "pl-20" : "pl-2"} pr-2 py-2 border-b border-neutral-200 dark:border-neutral-800 flex gap-2 [-webkit-app-region:drag]`}
+        >
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed((v) => !v)}
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded [-webkit-app-region:no-drag]"
+          >
+            {sidebarCollapsed ? "›" : "‹"}
+          </button>
+        </div>
         {selected ? (
           <textarea
             key={selected.id}
