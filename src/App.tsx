@@ -1,9 +1,39 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNotes } from "./hooks/useNotes";
 import type { Note } from "./types";
 
 const MIN_SIDEBAR = 180;
 const MAX_SIDEBAR = 600;
+
+function Splash({ onDone }: { onDone: () => void }) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setVisible(true));
+    const fadeOut = setTimeout(() => setVisible(false), 1200);
+    const unmount = setTimeout(onDone, 1900);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(fadeOut);
+      clearTimeout(unmount);
+    };
+  }, [onDone]);
+
+  return (
+    <div
+      aria-hidden
+      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-50 dark:bg-neutral-950 [-webkit-app-region:drag]"
+    >
+      <span
+        className={`text-4xl font-light tracking-[0.18em] text-neutral-800 dark:text-neutral-200 transition-opacity duration-700 ease-out ${
+          visible ? "opacity-100" : "opacity-0"
+        }`}
+      >
+        Mendeleev
+      </span>
+    </div>
+  );
+}
 
 function confirmDelete(note: Note | undefined) {
   if (!note) return false;
@@ -22,6 +52,7 @@ function App() {
     useNotes();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [splashDone, setSplashDone] = useState(false);
   const dragStart = useRef<{ x: number; w: number } | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -62,6 +93,7 @@ function App() {
 
   return (
     <div className="flex h-full w-full">
+      {!splashDone && <Splash onDone={() => setSplashDone(true)} />}
       {!sidebarCollapsed && (
         <>
           <aside
