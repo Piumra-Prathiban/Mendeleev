@@ -11,12 +11,27 @@ function confirmDelete(note: Note | undefined) {
   return window.confirm(`Delete "${label}"? This cannot be undone.`);
 }
 
+function splitContent(content: string) {
+  const i = content.indexOf("\n");
+  if (i === -1) return { title: content, body: "" };
+  return { title: content.slice(0, i), body: content.slice(i + 1) };
+}
+
 function App() {
   const { notes, selected, selectedId, loading, select, create, update, remove } =
     useNotes();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const dragStart = useRef<{ x: number; w: number } | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  const saveSelected = () => {
+    if (!selected) return;
+    const title = titleRef.current?.value ?? "";
+    const body = bodyRef.current?.value ?? "";
+    update(selected.id, body ? `${title}\n${body}` : title);
+  };
 
   const handleRemove = (id: string) => {
     const note = notes.find((n) => n.id === id);
@@ -129,13 +144,29 @@ function App() {
           </button>
         </div>
         {selected ? (
-          <textarea
-            key={selected.id}
-            defaultValue={selected.content}
-            onBlur={(e) => update(selected.id, e.target.value)}
-            className="flex-1 w-full resize-none p-4 outline-none bg-transparent font-mono text-sm"
-            placeholder="# Title&#10;Body…"
-          />
+          (() => {
+            const { title, body } = splitContent(selected.content);
+            return (
+              <div className="flex-1 flex flex-col min-h-0">
+                <input
+                  key={`${selected.id}-title`}
+                  ref={titleRef}
+                  defaultValue={title}
+                  onBlur={saveSelected}
+                  placeholder="Title"
+                  className="px-4 pt-4 pb-2 text-2xl font-semibold outline-none bg-transparent"
+                />
+                <textarea
+                  key={`${selected.id}-body`}
+                  ref={bodyRef}
+                  defaultValue={body}
+                  onBlur={saveSelected}
+                  placeholder="Body…"
+                  className="flex-1 w-full resize-none px-4 pb-4 outline-none bg-transparent font-mono text-sm"
+                />
+              </div>
+            );
+          })()
         ) : (
           <div className="p-4 text-sm text-neutral-500">Select or create a note</div>
         )}
