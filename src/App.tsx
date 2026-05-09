@@ -232,6 +232,45 @@ function App() {
     update(selected.id, body ? `${title}\n${body}` : title);
   };
 
+  const toggleUnderline = () => {
+    const ta = bodyRef.current;
+    if (!ta) return;
+    const open = "<u>";
+    const close = "</u>";
+    const { selectionStart: start, selectionEnd: end, value } = ta;
+    const before = value.slice(0, start);
+    const middle = value.slice(start, end);
+    const after = value.slice(end);
+
+    let nextValue: string;
+    let nextStart: number;
+    let nextEnd: number;
+
+    if (before.endsWith(open) && after.startsWith(close)) {
+      nextValue = before.slice(0, -open.length) + middle + after.slice(close.length);
+      nextStart = start - open.length;
+      nextEnd = end - open.length;
+    } else if (middle.startsWith(open) && middle.endsWith(close)) {
+      const inner = middle.slice(open.length, middle.length - close.length);
+      nextValue = before + inner + after;
+      nextStart = start;
+      nextEnd = start + inner.length;
+    } else {
+      nextValue = before + open + middle + close + after;
+      if (start === end) {
+        nextStart = nextEnd = start + open.length;
+      } else {
+        nextStart = start + open.length;
+        nextEnd = end + open.length;
+      }
+    }
+
+    ta.value = nextValue;
+    ta.setSelectionRange(nextStart, nextEnd);
+    ta.focus();
+    saveSelected();
+  };
+
   const handleRemove = (id: string) => {
     const note = notes.find((n) => n.id === id);
     if (confirmDelete(note)) remove(id);
@@ -367,7 +406,9 @@ function App() {
             <button
               type="button"
               aria-label="Underline"
-              title="Underline (coming soon)"
+              title="Underline"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={toggleUnderline}
               className="text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded underline [-webkit-app-region:no-drag]"
             >
               U
