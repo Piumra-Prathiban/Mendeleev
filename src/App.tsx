@@ -363,6 +363,16 @@ function App() {
           >
             {sidebarCollapsed ? "›" : "‹"}
           </button>
+          {selected && settings.showUnderlineButton && (
+            <button
+              type="button"
+              aria-label="Underline"
+              title="Underline (coming soon)"
+              className="text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded underline [-webkit-app-region:no-drag]"
+            >
+              U
+            </button>
+          )}
         </div>
         {selected ? (
           (() => {
@@ -377,18 +387,6 @@ function App() {
                   placeholder="Title"
                   className="px-4 pt-4 pb-2 text-2xl font-semibold outline-none bg-transparent"
                 />
-                {settings.showUnderlineButton && (
-                  <div className="px-4 pb-2 flex gap-2">
-                    <button
-                      type="button"
-                      aria-label="Underline"
-                      title="Underline (coming soon)"
-                      className="text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded underline"
-                    >
-                      U
-                    </button>
-                  </div>
-                )}
                 <textarea
                   key={`${selected.id}-body`}
                   ref={bodyRef}
