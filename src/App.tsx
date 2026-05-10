@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNotes } from "./hooks/useNotes";
 import type { Note } from "./types";
 
 const MIN_SIDEBAR = 180;
 const MAX_SIDEBAR = 600;
+const SAVE_DEBOUNCE_MS = 300;
 
 type Settings = {
   splashEnabled: boolean;
@@ -224,13 +225,41 @@ function App() {
   const dragStart = useRef<{ x: number; w: number } | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const pendingSave = useRef<{ timer: number | null; id: string | null; content: string }>({
+    timer: null,
+    id: null,
+    content: "",
+  });
 
-  const saveSelected = () => {
+  const flushSave = useCallback(() => {
+    const p = pendingSave.current;
+    if (p.timer !== null) {
+      clearTimeout(p.timer);
+      p.timer = null;
+    }
+    if (!p.id) return;
+    const id = p.id;
+    const content = p.content;
+    p.id = null;
+    update(id, content);
+  }, [update]);
+
+  const scheduleSave = useCallback(() => {
     if (!selected) return;
     const title = titleRef.current?.value ?? "";
     const body = bodyRef.current?.value ?? "";
-    update(selected.id, body ? `${title}\n${body}` : title);
-  };
+    const content = body ? `${title}\n${body}` : title;
+    const p = pendingSave.current;
+    p.id = selected.id;
+    p.content = content;
+    if (p.timer !== null) clearTimeout(p.timer);
+    p.timer = window.setTimeout(flushSave, SAVE_DEBOUNCE_MS);
+  }, [selected, flushSave]);
+
+  // Flush pending save when switching notes (cleanup runs before next selected.id renders).
+  useEffect(() => {
+    return () => flushSave();
+  }, [selected?.id, flushSave]);
 
   const toggleUnderline = () => {
     const ta = bodyRef.current;
@@ -268,7 +297,7 @@ function App() {
     ta.value = nextValue;
     ta.setSelectionRange(nextStart, nextEnd);
     ta.focus();
-    saveSelected();
+    scheduleSave();
   };
 
   const handleRemove = (id: string) => {
@@ -424,7 +453,8 @@ function App() {
                   key={`${selected.id}-title`}
                   ref={titleRef}
                   defaultValue={title}
-                  onBlur={saveSelected}
+                  onChange={scheduleSave}
+                  onBlur={flushSave}
                   placeholder="Title"
                   className="px-4 pt-4 pb-2 text-2xl font-semibold outline-none bg-transparent"
                 />
@@ -432,7 +462,8 @@ function App() {
                   key={`${selected.id}-body`}
                   ref={bodyRef}
                   defaultValue={body}
-                  onBlur={saveSelected}
+                  onChange={scheduleSave}
+                  onBlur={flushSave}
                   placeholder="Body…"
                   className="flex-1 w-full resize-none px-4 pb-4 outline-none bg-transparent font-mono text-sm"
                 />
