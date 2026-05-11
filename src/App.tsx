@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNotes } from "./hooks/useNotes";
+import { htmlToText, previewLine } from "./lib/text";
 import type { Note } from "./types";
 
 const MIN_SIDEBAR = 180;
@@ -224,7 +225,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const dragStart = useRef<{ x: number; w: number } | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const pendingSave = useRef<{ timer: number | null; id: string | null; content: string }>({
     timer: null,
     id: null,
@@ -247,7 +248,7 @@ function App() {
   const scheduleSave = useCallback(() => {
     if (!selected) return;
     const title = titleRef.current?.value ?? "";
-    const body = bodyRef.current?.value ?? "";
+    const body = bodyRef.current?.innerHTML ?? "";
     const content = body ? `${title}\n${body}` : title;
     const p = pendingSave.current;
     p.id = selected.id;
@@ -262,41 +263,10 @@ function App() {
   }, [selected?.id, flushSave]);
 
   const toggleUnderline = () => {
-    const ta = bodyRef.current;
-    if (!ta) return;
-    const open = "<u>";
-    const close = "</u>";
-    const { selectionStart: start, selectionEnd: end, value } = ta;
-    const before = value.slice(0, start);
-    const middle = value.slice(start, end);
-    const after = value.slice(end);
-
-    let nextValue: string;
-    let nextStart: number;
-    let nextEnd: number;
-
-    if (before.endsWith(open) && after.startsWith(close)) {
-      nextValue = before.slice(0, -open.length) + middle + after.slice(close.length);
-      nextStart = start - open.length;
-      nextEnd = end - open.length;
-    } else if (middle.startsWith(open) && middle.endsWith(close)) {
-      const inner = middle.slice(open.length, middle.length - close.length);
-      nextValue = before + inner + after;
-      nextStart = start;
-      nextEnd = start + inner.length;
-    } else {
-      nextValue = before + open + middle + close + after;
-      if (start === end) {
-        nextStart = nextEnd = start + open.length;
-      } else {
-        nextStart = start + open.length;
-        nextEnd = end + open.length;
-      }
-    }
-
-    ta.value = nextValue;
-    ta.setSelectionRange(nextStart, nextEnd);
-    ta.focus();
+    const el = bodyRef.current;
+    if (!el) return;
+    if (document.activeElement !== el) el.focus();
+    document.execCommand("underline");
     scheduleSave();
   };
 
@@ -381,32 +351,43 @@ function App() {
               {!loading && notes.length === 0 && (
                 <li className="p-2 text-sm text-neutral-500">No notes yet</li>
               )}
-              {notes.map((n) => (
-                <li key={n.id} className="group relative">
-                  <button
-                    type="button"
-                    onClick={() => select(n.id)}
-                    className={`w-full text-left pl-3 pr-9 py-2 text-base font-medium truncate ${
-                      n.id === selectedId
-                        ? "bg-neutral-200 dark:bg-neutral-800"
-                        : "hover:bg-neutral-100 dark:hover:bg-neutral-900"
-                    }`}
-                  >
-                    {n.title || "Untitled"}
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Delete ${n.title || "Untitled"}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemove(n.id);
-                    }}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded text-neutral-500 hover:text-red-600 hover:bg-neutral-200 dark:hover:bg-neutral-700 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
+              {notes.map((n) => {
+                const displayTitle = htmlToText(n.title).trim() || "Untitled";
+                const newlineAt = n.content.indexOf("\n");
+                const body = newlineAt === -1 ? "" : n.content.slice(newlineAt + 1);
+                const preview = previewLine(body, 80);
+                return (
+                  <li key={n.id} className="group relative">
+                    <button
+                      type="button"
+                      onClick={() => select(n.id)}
+                      className={`w-full text-left pl-3 pr-9 py-2 ${
+                        n.id === selectedId
+                          ? "bg-neutral-200 dark:bg-neutral-800"
+                          : "hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                      }`}
+                    >
+                      <div className="text-base font-medium truncate">{displayTitle}</div>
+                      {preview && (
+                        <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
+                          {preview}
+                        </div>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${displayTitle}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemove(n.id);
+                      }}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded text-neutral-500 hover:text-red-600 hover:bg-neutral-200 dark:hover:bg-neutral-700 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    >
+                      ×
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </aside>
           <div
@@ -458,14 +439,26 @@ function App() {
                   placeholder="Title"
                   className="px-4 pt-4 pb-2 text-2xl font-semibold outline-none bg-transparent"
                 />
-                <textarea
+                <div
                   key={`${selected.id}-body`}
-                  ref={bodyRef}
-                  defaultValue={body}
-                  onChange={scheduleSave}
+                  ref={(el) => {
+                    bodyRef.current = el;
+                    if (el && el.dataset.initialized !== "true") {
+                      el.innerHTML = body;
+                      el.dataset.initialized = "true";
+                    }
+                  }}
+                  contentEditable
+                  suppressContentEditableWarning
+                  spellCheck
+                  onInput={scheduleSave}
                   onBlur={flushSave}
-                  placeholder="Body…"
-                  className="flex-1 w-full resize-none px-4 pb-4 outline-none bg-transparent font-mono text-sm"
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const text = e.clipboardData.getData("text/plain");
+                    document.execCommand("insertText", false, text);
+                  }}
+                  className="flex-1 w-full overflow-auto px-4 pb-4 outline-none bg-transparent text-base whitespace-pre-wrap"
                 />
               </div>
             );
