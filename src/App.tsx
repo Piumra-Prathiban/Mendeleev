@@ -10,13 +10,13 @@ const SAVE_DEBOUNCE_MS = 300;
 type Settings = {
   splashEnabled: boolean;
   splashDurationMs: number;
-  showUnderlineButton: boolean;
+  showFormattingButtons: boolean;
 };
 
 const DEFAULT_SETTINGS: Settings = {
   splashEnabled: true,
   splashDurationMs: 1900,
-  showUnderlineButton: true,
+  showFormattingButtons: true,
 };
 
 const SETTINGS_KEY = "mendeleev:settings";
@@ -141,12 +141,12 @@ function SettingsPanel({
           </Row>
 
           <Row
-            label="Underline button"
-            hint="Show the underline button in the editor toolbar"
+            label="Formatting buttons"
+            hint="Show bold, italic, underline, strikethrough, and heading buttons"
           >
             <Toggle
-              checked={settings.showUnderlineButton}
-              onChange={(v) => patch({ showUnderlineButton: v })}
+              checked={settings.showFormattingButtons}
+              onChange={(v) => patch({ showFormattingButtons: v })}
             />
           </Row>
 
@@ -203,6 +203,34 @@ function Toggle({
   );
 }
 
+function FmtButton({
+  label,
+  title,
+  onClick,
+  className = "",
+  children,
+}: {
+  label: string;
+  title: string;
+  onClick: () => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={title}
+      // Prevent the editor from losing selection when the toolbar takes focus.
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      className={`text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function confirmDelete(note: Note | undefined) {
   if (!note) return false;
   const label = note.title || "Untitled";
@@ -213,6 +241,20 @@ function splitContent(content: string) {
   const i = content.indexOf("\n");
   if (i === -1) return { title: content, body: "" };
   return { title: content.slice(0, i), body: content.slice(i + 1) };
+}
+
+// Walks up from the current selection to find the nearest block tag inside the editor.
+function currentBlockTag(root: HTMLElement): string {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return "";
+  let node: Node | null = sel.anchorNode;
+  while (node && node !== root) {
+    if (node instanceof HTMLElement && /^(H[1-6]|P|DIV|LI|BLOCKQUOTE)$/.test(node.tagName)) {
+      return node.tagName;
+    }
+    node = node.parentNode;
+  }
+  return "";
 }
 
 function App() {
@@ -262,11 +304,23 @@ function App() {
     return () => flushSave();
   }, [selected?.id, flushSave]);
 
-  const toggleUnderline = () => {
+  const focusBody = () => {
     const el = bodyRef.current;
-    if (!el) return;
+    if (!el) return null;
     if (document.activeElement !== el) el.focus();
-    document.execCommand("underline");
+    return el;
+  };
+
+  const applyInline = (cmd: "bold" | "italic" | "underline" | "strikeThrough") => {
+    if (!focusBody()) return;
+    document.execCommand(cmd);
+    scheduleSave();
+  };
+
+  const applyHeading = (tag: "H1" | "H2" | "H3") => {
+    const el = focusBody();
+    if (!el) return;
+    document.execCommand("formatBlock", false, currentBlockTag(el) === tag ? "P" : tag);
     scheduleSave();
   };
 
@@ -412,17 +466,17 @@ function App() {
           >
             {sidebarCollapsed ? "›" : "‹"}
           </button>
-          {selected && settings.showUnderlineButton && (
-            <button
-              type="button"
-              aria-label="Underline"
-              title="Underline"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={toggleUnderline}
-              className="text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded underline [-webkit-app-region:no-drag]"
-            >
-              U
-            </button>
+          {selected && settings.showFormattingButtons && (
+            <div className="flex gap-1 [-webkit-app-region:no-drag]">
+              <FmtButton label="Bold" title="Bold (⌘B)" onClick={() => applyInline("bold")} className="font-bold">B</FmtButton>
+              <FmtButton label="Italic" title="Italic (⌘I)" onClick={() => applyInline("italic")} className="italic">I</FmtButton>
+              <FmtButton label="Underline" title="Underline (⌘U)" onClick={() => applyInline("underline")} className="underline">U</FmtButton>
+              <FmtButton label="Strikethrough" title="Strikethrough" onClick={() => applyInline("strikeThrough")} className="line-through">S</FmtButton>
+              <span className="w-px self-stretch bg-neutral-300 dark:bg-neutral-700 mx-1" />
+              <FmtButton label="Heading 1" title="Heading 1" onClick={() => applyHeading("H1")}>H1</FmtButton>
+              <FmtButton label="Heading 2" title="Heading 2" onClick={() => applyHeading("H2")}>H2</FmtButton>
+              <FmtButton label="Heading 3" title="Heading 3" onClick={() => applyHeading("H3")}>H3</FmtButton>
+            </div>
           )}
         </div>
         {selected ? (
@@ -458,7 +512,7 @@ function App() {
                     const text = e.clipboardData.getData("text/plain");
                     document.execCommand("insertText", false, text);
                   }}
-                  className="flex-1 w-full overflow-auto px-4 pb-4 outline-none bg-transparent text-base whitespace-pre-wrap"
+                  className="editor-body flex-1 w-full overflow-auto px-4 pb-4 outline-none bg-transparent text-base whitespace-pre-wrap"
                 />
               </div>
             );
