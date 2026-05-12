@@ -258,8 +258,19 @@ function currentBlockTag(root: HTMLElement): string {
 }
 
 function App() {
-  const { notes, selected, selectedId, loading, select, create, update, remove } =
-    useNotes();
+  const {
+    notes,
+    filteredNotes,
+    query,
+    setQuery,
+    selected,
+    selectedId,
+    loading,
+    select,
+    create,
+    update,
+    remove,
+  } = useNotes();
   const { settings, patch } = useSettings();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(260);
@@ -400,12 +411,30 @@ function App() {
                 ⚙
               </button>
             </div>
+            <div className="px-2 py-2 border-b border-neutral-200 dark:border-neutral-800">
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setQuery("");
+                    e.currentTarget.blur();
+                  }
+                }}
+                placeholder="Search"
+                aria-label="Search notes"
+                className="w-full px-2 py-1 text-sm bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded outline-none focus:border-neutral-400 dark:focus:border-neutral-600"
+              />
+            </div>
             <ul className="flex-1 overflow-auto">
               {loading && <li className="p-2 text-sm text-neutral-500">Loading…</li>}
-              {!loading && notes.length === 0 && (
-                <li className="p-2 text-sm text-neutral-500">No notes yet</li>
+              {!loading && filteredNotes.length === 0 && (
+                <li className="p-2 text-sm text-neutral-500">
+                  {query.trim() ? "No matches" : "No notes yet"}
+                </li>
               )}
-              {notes.map((n) => {
+              {filteredNotes.map((n) => {
                 const displayTitle = htmlToText(n.title).trim() || "Untitled";
                 const newlineAt = n.content.indexOf("\n");
                 const body = newlineAt === -1 ? "" : n.content.slice(newlineAt + 1);
