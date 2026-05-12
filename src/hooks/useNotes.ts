@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Note } from "../types";
 import * as api from "../lib/api";
+import { htmlToText } from "../lib/text";
 
 const byUpdatedDesc = (a: Note, b: Note) => b.updated_at - a.updated_at;
 
@@ -8,6 +9,7 @@ export function useNotes() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
 
   const refresh = useCallback(async () => {
     const list = await api.listNotes();
@@ -62,8 +64,26 @@ export function useNotes() {
     [notes, selectedId],
   );
 
+  const filteredNotes = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return notes;
+    return notes.filter((n) => {
+      const hay = (htmlToText(n.title) + " " + htmlToText(n.content)).toLowerCase();
+      return hay.includes(q);
+    });
+  }, [notes, query]);
+
+  useEffect(() => {
+    if (selectedId && !filteredNotes.some((n) => n.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [filteredNotes, selectedId]);
+
   return {
     notes,
+    filteredNotes,
+    query,
+    setQuery,
     selectedId,
     selected,
     loading,
