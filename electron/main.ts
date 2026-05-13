@@ -2,16 +2,20 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { openDb, listNotes, getNote, createNote, updateNote, deleteNote, searchNotes } from "./db";
+import { loadWindowBounds, trackWindowBounds } from "./window-state";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let win: BrowserWindow | null = null;
 
 function createWindow() {
+  const bounds = loadWindowBounds();
   win = new BrowserWindow({
     title: "Mendeleev",
-    width: 1100,
-    height: 720,
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
     minWidth: 720,
     minHeight: 480,
     backgroundColor: "#ffffff",
@@ -23,6 +27,7 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
+  trackWindowBounds(win);
 
   if (process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL);
