@@ -97,6 +97,7 @@ function SettingsPanel({
     >
       <div
         role="dialog"
+        aria-modal="true"
         aria-label="Settings"
         onClick={(e) => e.stopPropagation()}
         className="w-[420px] max-w-[90vw] rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 shadow-xl"
@@ -107,7 +108,7 @@ function SettingsPanel({
             type="button"
             onClick={onClose}
             aria-label="Close settings"
-            className="w-7 h-7 rounded text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            className="w-7 h-7 rounded text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500"
           >
             ×
           </button>
@@ -224,7 +225,7 @@ function FmtButton({
       // Prevent the editor from losing selection when the toolbar takes focus.
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className={`text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded ${className}`}
+      className={`text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 ${className}`}
     >
       {children}
     </button>
@@ -388,7 +389,7 @@ function App() {
               <button
                 type="button"
                 onClick={() => create()}
-                className="text-sm px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded [-webkit-app-region:no-drag]"
+                className="text-sm px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 [-webkit-app-region:no-drag]"
               >
                 New
               </button>
@@ -396,7 +397,7 @@ function App() {
                 <button
                   type="button"
                   onClick={() => handleRemove(selectedId)}
-                  className="text-sm px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded [-webkit-app-region:no-drag]"
+                  className="text-sm px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 [-webkit-app-region:no-drag]"
                 >
                   Delete
                 </button>
@@ -406,7 +407,7 @@ function App() {
                 onClick={() => setSettingsOpen(true)}
                 aria-label="Open settings"
                 title="Settings"
-                className="text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded [-webkit-app-region:no-drag]"
+                className="text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 [-webkit-app-region:no-drag]"
               >
                 ⚙
               </button>
@@ -424,7 +425,7 @@ function App() {
                 }}
                 placeholder="Search"
                 aria-label="Search notes"
-                className="w-full px-2 py-1 text-sm bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded outline-none focus:border-neutral-400 dark:focus:border-neutral-600"
+                className="w-full px-2 py-1 text-sm bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded outline-none transition-colors duration-150 focus:border-neutral-400 dark:focus:border-neutral-600"
               />
             </div>
             <ul className="flex-1 overflow-auto">
@@ -444,7 +445,8 @@ function App() {
                     <button
                       type="button"
                       onClick={() => select(n.id)}
-                      className={`w-full text-left pl-3 pr-9 py-2 ${
+                      aria-current={n.id === selectedId ? "true" : undefined}
+                      className={`w-full text-left pl-3 pr-9 py-2 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 ${
                         n.id === selectedId
                           ? "bg-neutral-200 dark:bg-neutral-800"
                           : "hover:bg-neutral-100 dark:hover:bg-neutral-900"
@@ -464,7 +466,7 @@ function App() {
                         e.stopPropagation();
                         handleRemove(n.id);
                       }}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded text-neutral-500 hover:text-red-600 hover:bg-neutral-200 dark:hover:bg-neutral-700 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded text-neutral-500 hover:text-red-600 hover:bg-neutral-200 dark:hover:bg-neutral-700 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 transition-opacity duration-150"
                     >
                       ×
                     </button>
@@ -491,7 +493,8 @@ function App() {
             type="button"
             onClick={() => setSidebarCollapsed((v) => !v)}
             aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded [-webkit-app-region:no-drag]"
+            aria-expanded={!sidebarCollapsed}
+            className="text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 [-webkit-app-region:no-drag]"
           >
             {sidebarCollapsed ? "›" : "‹"}
           </button>
