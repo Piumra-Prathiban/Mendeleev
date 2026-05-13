@@ -5,6 +5,23 @@ import { htmlToText } from "../lib/text";
 
 const byUpdatedDesc = (a: Note, b: Note) => b.updated_at - a.updated_at;
 
+const LAST_SELECTED_KEY = "mendeleev:lastSelectedId";
+
+function readLastSelected(): string | null {
+  try {
+    return localStorage.getItem(LAST_SELECTED_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeLastSelected(id: string | null) {
+  try {
+    if (id) localStorage.setItem(LAST_SELECTED_KEY, id);
+    else localStorage.removeItem(LAST_SELECTED_KEY);
+  } catch {}
+}
+
 export function useNotes() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -23,13 +40,22 @@ export function useNotes() {
       const list = await api.listNotes();
       if (cancelled) return;
       setNotes(list);
-      setSelectedId((prev) => prev ?? list[0]?.id ?? null);
+      setSelectedId((prev) => {
+        if (prev) return prev;
+        const stored = readLastSelected();
+        if (stored && list.some((n) => n.id === stored)) return stored;
+        return list[0]?.id ?? null;
+      });
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    writeLastSelected(selectedId);
+  }, [selectedId]);
 
   const select = useCallback((id: string | null) => {
     setSelectedId(id);
