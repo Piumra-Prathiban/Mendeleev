@@ -66,13 +66,65 @@ function searchNotes(query) {
        ORDER BY updated_at DESC`
   ).all(pattern, pattern);
 }
+const DEFAULTS = { width: 1100, height: 720 };
+const SAVE_DEBOUNCE_MS = 250;
+function isFinitePositive(n) {
+  return typeof n === "number" && Number.isFinite(n) && n > 0;
+}
+function isOnScreen(b) {
+  if (b.x === void 0 || b.y === void 0) return true;
+  return electron.screen.getAllDisplays().some((d) => {
+    const { x, y, width, height } = d.workArea;
+    return b.x >= x && b.y >= y && b.x + b.width <= x + width && b.y + b.height <= y + height;
+  });
+}
+function loadWindowBounds() {
+  const file = path.join(electron.app.getPath("userData"), "window-state.json");
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf-8"));
+    if (!isFinitePositive(parsed.width) || !isFinitePositive(parsed.height)) return DEFAULTS;
+    const bounds = {
+      width: parsed.width,
+      height: parsed.height,
+      x: isFinitePositive(parsed.x) ? parsed.x : void 0,
+      y: isFinitePositive(parsed.y) ? parsed.y : void 0
+    };
+    return isOnScreen(bounds) ? bounds : { width: bounds.width, height: bounds.height };
+  } catch {
+    return DEFAULTS;
+  }
+}
+function trackWindowBounds(win2) {
+  const file = path.join(electron.app.getPath("userData"), "window-state.json");
+  let timer = null;
+  const persist = () => {
+    if (win2.isDestroyed() || win2.isMinimized() || win2.isFullScreen()) return;
+    try {
+      fs.writeFileSync(file, JSON.stringify(win2.getNormalBounds()));
+    } catch {
+    }
+  };
+  const schedule = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(persist, SAVE_DEBOUNCE_MS);
+  };
+  win2.on("resize", schedule);
+  win2.on("move", schedule);
+  win2.on("close", () => {
+    if (timer) clearTimeout(timer);
+    persist();
+  });
+}
 const __dirname$1 = path.dirname(node_url.fileURLToPath(require("url").pathToFileURL(__filename).href));
 let win = null;
 function createWindow() {
+  const bounds = loadWindowBounds();
   win = new electron.BrowserWindow({
     title: "Mendeleev",
-    width: 1100,
-    height: 720,
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
     minWidth: 720,
     minHeight: 480,
     backgroundColor: "#ffffff",
@@ -84,6 +136,7 @@ function createWindow() {
       nodeIntegration: false
     }
   });
+  trackWindowBounds(win);
   if (process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
