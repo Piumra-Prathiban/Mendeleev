@@ -323,6 +323,18 @@ function App() {
     return el;
   };
 
+  const focusBodyAtStart = () => {
+    const el = focusBody();
+    if (!el) return;
+    const sel = window.getSelection();
+    if (!sel) return;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  };
+
   const applyInline = (cmd: "bold" | "italic" | "underline" | "strikeThrough") => {
     if (!focusBody()) return;
     document.execCommand(cmd);
@@ -521,6 +533,18 @@ function App() {
                   ref={titleRef}
                   defaultValue={title}
                   onChange={scheduleSave}
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === "Enter" &&
+                      !e.shiftKey &&
+                      !e.altKey &&
+                      !e.ctrlKey &&
+                      !e.metaKey
+                    ) {
+                      e.preventDefault();
+                      focusBodyAtStart();
+                    }
+                  }}
                   onBlur={flushSave}
                   placeholder="Title"
                   className="px-4 pt-4 pb-2 text-2xl font-semibold outline-none bg-transparent"
