@@ -11,12 +11,25 @@ type Settings = {
   splashEnabled: boolean;
   splashDurationMs: number;
   showFormattingButtons: boolean;
+  theme: "light" | "dark";
 };
+
+function systemTheme(): Settings["theme"] {
+  if (typeof window === "undefined") return "light";
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function applyTheme(theme: Settings["theme"]) {
+  const root = document.documentElement;
+  root.classList.toggle("dark", theme === "dark");
+  root.style.colorScheme = theme;
+}
 
 const DEFAULT_SETTINGS: Settings = {
   splashEnabled: true,
   splashDurationMs: 1900,
   showFormattingButtons: true,
+  theme: systemTheme(),
 };
 
 const SETTINGS_KEY = "mendeleev:settings";
@@ -25,7 +38,10 @@ function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw) as Partial<Settings>;
+    const merged = { ...DEFAULT_SETTINGS, ...parsed };
+    if (merged.theme !== "light" && merged.theme !== "dark") merged.theme = DEFAULT_SETTINGS.theme;
+    return merged;
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -37,6 +53,10 @@ function useSettings() {
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    applyTheme(settings.theme);
+  }, [settings.theme]);
 
   const patch = (p: Partial<Settings>) => setSettings((s) => ({ ...s, ...p }));
   return { settings, patch };
@@ -148,6 +168,16 @@ function SettingsPanel({
             <Toggle
               checked={settings.showFormattingButtons}
               onChange={(v) => patch({ showFormattingButtons: v })}
+            />
+          </Row>
+
+          <Row
+            label="Theme"
+            hint={settings.theme === "dark" ? "Use dark appearance" : "Use light appearance"}
+          >
+            <Toggle
+              checked={settings.theme === "dark"}
+              onChange={(v) => patch({ theme: v ? "dark" : "light" })}
             />
           </Row>
 
