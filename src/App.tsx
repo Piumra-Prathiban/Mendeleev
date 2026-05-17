@@ -288,6 +288,23 @@ function currentBlockTag(root: HTMLElement): string {
   return "";
 }
 
+function currentBlockAlign(root: HTMLElement): "left" | "center" | "right" | "" {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return "";
+  let node: Node | null = sel.anchorNode;
+  while (node && node !== root) {
+    if (node instanceof HTMLElement && /^(H[1-6]|P|DIV|LI|BLOCKQUOTE)$/.test(node.tagName)) {
+      const align = window.getComputedStyle(node).textAlign;
+      if (align === "center") return "center";
+      if (align === "right" || align === "end") return "right";
+      if (align === "left" || align === "start") return "left";
+      return "left";
+    }
+    node = node.parentNode;
+  }
+  return "";
+}
+
 function App() {
   const {
     notes,
@@ -307,9 +324,12 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [splashDone, setSplashDone] = useState(!settings.splashEnabled);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [alignMenuOpen, setAlignMenuOpen] = useState(false);
+  const [currentAlign, setCurrentAlign] = useState<"left" | "center" | "right">("left");
   const dragStart = useRef<{ x: number; w: number } | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const alignMenuRef = useRef<HTMLDivElement>(null);
   const pendingSave = useRef<{ timer: number | null; id: string | null; content: string }>({
     timer: null,
     id: null,
@@ -377,6 +397,55 @@ function App() {
     document.execCommand("formatBlock", false, currentBlockTag(el) === tag ? "P" : tag);
     scheduleSave();
   };
+
+  const applyAlign = (align: "left" | "center" | "right") => {
+    if (!focusBody()) return;
+    const cmd = align === "left" ? "justifyLeft" : align === "center" ? "justifyCenter" : "justifyRight";
+    document.execCommand(cmd);
+    setCurrentAlign(align);
+    setAlignMenuOpen(false);
+    scheduleSave();
+  };
+
+  useEffect(() => {
+    if (!selected || !settings.showFormattingButtons) return;
+
+    const sync = () => {
+      const root = bodyRef.current;
+      if (!root) return;
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      const anchor = sel.anchorNode;
+      if (!anchor) return;
+      const anchorEl = anchor instanceof HTMLElement ? anchor : anchor.parentElement;
+      if (!anchorEl || !root.contains(anchorEl)) return;
+      const align = currentBlockAlign(root);
+      if (align) setCurrentAlign(align);
+    };
+
+    const onSelectionChange = () => sync();
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, [selected, settings.showFormattingButtons]);
+
+  useEffect(() => {
+    if (!alignMenuOpen) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      const el = alignMenuRef.current;
+      if (!el) return;
+      if (e.target instanceof Node && !el.contains(e.target)) setAlignMenuOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAlignMenuOpen(false);
+    };
+    window.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [alignMenuOpen]);
 
   const handleRemove = (id: string) => {
     const note = notes.find((n) => n.id === id);
@@ -550,6 +619,50 @@ function App() {
               <FmtButton label="Heading 1" title="Heading 1" onClick={() => applyHeading("H1")}>H1</FmtButton>
               <FmtButton label="Heading 2" title="Heading 2" onClick={() => applyHeading("H2")}>H2</FmtButton>
               <FmtButton label="Heading 3" title="Heading 3" onClick={() => applyHeading("H3")}>H3</FmtButton>
+              <span className="w-px self-stretch bg-neutral-300 dark:bg-neutral-700 mx-1" />
+              <div ref={alignMenuRef} className="relative">
+                <button
+                  type="button"
+                  aria-label="Alignment"
+                  title="Alignment"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setAlignMenuOpen((v) => !v)}
+                  className="text-sm h-7 px-2 flex items-center justify-center gap-1 border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500"
+                >
+                  <span className="min-w-3 text-center">
+                    {currentAlign === "left" ? "L" : currentAlign === "center" ? "C" : "R"}
+                  </span>
+                  <span className="text-[10px] leading-none">▾</span>
+                </button>
+                {alignMenuOpen && (
+                  <div className="absolute z-20 mt-1 left-0 w-36 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 shadow-sm p-1">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => applyAlign("left")}
+                      className={`w-full text-left text-sm px-2 py-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-800 ${currentAlign === "left" ? "bg-neutral-200 dark:bg-neutral-800" : ""}`}
+                    >
+                      Left
+                    </button>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => applyAlign("center")}
+                      className={`w-full text-left text-sm px-2 py-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-800 ${currentAlign === "center" ? "bg-neutral-200 dark:bg-neutral-800" : ""}`}
+                    >
+                      Center
+                    </button>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => applyAlign("right")}
+                      className={`w-full text-left text-sm px-2 py-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-800 ${currentAlign === "right" ? "bg-neutral-200 dark:bg-neutral-800" : ""}`}
+                    >
+                      Right
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
