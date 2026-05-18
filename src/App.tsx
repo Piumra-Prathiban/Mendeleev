@@ -381,6 +381,12 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [alignMenuOpen, setAlignMenuOpen] = useState(false);
   const [currentAlign, setCurrentAlign] = useState<"left" | "center" | "right">("left");
+  const [inlineState, setInlineState] = useState({
+    bold: false,
+    italic: false,
+    underline: false,
+    strikeThrough: false,
+  });
   const dragStart = useRef<{ x: number; w: number } | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -451,7 +457,20 @@ function App() {
 
   const applyInline = (cmd: "bold" | "italic" | "underline" | "strikeThrough") => {
     if (!focusBody()) return;
+    const sel = window.getSelection();
+    const wasCollapsed = !sel || sel.rangeCount === 0 ? true : sel.getRangeAt(0).collapsed;
     document.execCommand(cmd);
+    // If we formatted a selection, don't keep the command "latched" for subsequent typing.
+    if (!wasCollapsed) {
+      const nextSel = window.getSelection();
+      if (nextSel && nextSel.rangeCount > 0) {
+        const r = nextSel.getRangeAt(0).cloneRange();
+        r.collapse(false);
+        nextSel.removeAllRanges();
+        nextSel.addRange(r);
+        if (document.queryCommandState(cmd)) document.execCommand(cmd);
+      }
+    }
     scheduleSave();
   };
 
@@ -491,6 +510,12 @@ function App() {
       lastEditorRange.current = sel.getRangeAt(0).cloneRange();
       const align = currentBlockAlign(root);
       if (align) setCurrentAlign(align);
+      setInlineState({
+        bold: document.queryCommandState("bold"),
+        italic: document.queryCommandState("italic"),
+        underline: document.queryCommandState("underline"),
+        strikeThrough: document.queryCommandState("strikeThrough"),
+      });
     };
 
     const onSelectionChange = () => sync();
@@ -681,10 +706,38 @@ function App() {
           </button>
           {selected && settings.showFormattingButtons && (
             <div className="flex gap-1 [-webkit-app-region:no-drag]">
-              <FmtButton label="Bold" title="Bold (⌘B)" onClick={() => applyInline("bold")} className="font-bold">B</FmtButton>
-              <FmtButton label="Italic" title="Italic (⌘I)" onClick={() => applyInline("italic")} className="italic">I</FmtButton>
-              <FmtButton label="Underline" title="Underline (⌘U)" onClick={() => applyInline("underline")} className="underline">U</FmtButton>
-              <FmtButton label="Strikethrough" title="Strikethrough" onClick={() => applyInline("strikeThrough")} className="line-through">S</FmtButton>
+              <FmtButton
+                label="Bold"
+                title="Bold (⌘B)"
+                onClick={() => applyInline("bold")}
+                className={`font-bold ${inlineState.bold ? "bg-neutral-200 dark:bg-neutral-800" : ""}`}
+              >
+                B
+              </FmtButton>
+              <FmtButton
+                label="Italic"
+                title="Italic (⌘I)"
+                onClick={() => applyInline("italic")}
+                className={`italic ${inlineState.italic ? "bg-neutral-200 dark:bg-neutral-800" : ""}`}
+              >
+                I
+              </FmtButton>
+              <FmtButton
+                label="Underline"
+                title="Underline (⌘U)"
+                onClick={() => applyInline("underline")}
+                className={`underline ${inlineState.underline ? "bg-neutral-200 dark:bg-neutral-800" : ""}`}
+              >
+                U
+              </FmtButton>
+              <FmtButton
+                label="Strikethrough"
+                title="Strikethrough"
+                onClick={() => applyInline("strikeThrough")}
+                className={`line-through ${inlineState.strikeThrough ? "bg-neutral-200 dark:bg-neutral-800" : ""}`}
+              >
+                S
+              </FmtButton>
               <span className="w-px self-stretch bg-neutral-300 dark:bg-neutral-700 mx-1" />
               <FmtButton label="Heading 1" title="Heading 1" onClick={() => applyHeading("H1")}>H1</FmtButton>
               <FmtButton label="Heading 2" title="Heading 2" onClick={() => applyHeading("H2")}>H2</FmtButton>
