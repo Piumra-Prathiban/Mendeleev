@@ -274,6 +274,15 @@ function splitContent(content: string) {
   return { title: content.slice(0, i), body: content.slice(i + 1) };
 }
 
+function isSelectionInside(root: HTMLElement) {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return false;
+  const anchor = sel.anchorNode;
+  if (!anchor) return false;
+  const anchorEl = anchor instanceof HTMLElement ? anchor : anchor.parentElement;
+  return !!anchorEl && root.contains(anchorEl);
+}
+
 // Walks up from the current selection to find the nearest block tag inside the editor.
 function currentBlockTag(root: HTMLElement): string {
   const sel = window.getSelection();
@@ -305,6 +314,52 @@ function currentBlockAlign(root: HTMLElement): "left" | "center" | "right" | "" 
   return "";
 }
 
+function applyAlignToSelection(root: HTMLElement, align: "left" | "center" | "right") {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  const blockTags = /^(H[1-6]|P|DIV|LI|BLOCKQUOTE)$/;
+
+  // If selection is collapsed, just align the current block element.
+  if (range.collapsed) {
+    let node: Node | null = range.startContainer;
+    while (node && node !== root) {
+      if (node instanceof HTMLElement && blockTags.test(node.tagName)) {
+        node.style.textAlign = align;
+        return;
+      }
+      node = node.parentNode;
+    }
+    root.style.textAlign = align;
+    return;
+  }
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
+    acceptNode: (n) => {
+      if (!(n instanceof HTMLElement)) return NodeFilter.FILTER_SKIP;
+      if (!blockTags.test(n.tagName)) return NodeFilter.FILTER_SKIP;
+      // Only align blocks that intersect the current selection.
+      try {
+        return range.intersectsNode(n) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+      } catch {
+        // Some older engines can throw for certain nodes; be conservative.
+        return NodeFilter.FILTER_SKIP;
+      }
+    },
+  });
+
+  const blocks: HTMLElement[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (n instanceof HTMLElement) blocks.push(n);
+  }
+
+  if (blocks.length === 0) {
+    root.style.textAlign = align;
+    return;
+  }
+  for (const b of blocks) b.style.textAlign = align;
+}
+
 function App() {
   const {
     notes,
@@ -330,6 +385,7 @@ function App() {
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const alignMenuRef = useRef<HTMLDivElement>(null);
+  const lastEditorRange = useRef<Range | null>(null);
   const pendingSave = useRef<{ timer: number | null; id: string | null; content: string }>({
     timer: null,
     id: null,
@@ -370,6 +426,14 @@ function App() {
     const el = bodyRef.current;
     if (!el) return null;
     if (document.activeElement !== el) el.focus();
+    // Restore last known selection so toolbar actions apply at the caret.
+    if (!isSelectionInside(el) && lastEditorRange.current) {
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(lastEditorRange.current);
+      }
+    }
     return el;
   };
 
@@ -394,14 +458,18 @@ function App() {
   const applyHeading = (tag: "H1" | "H2" | "H3") => {
     const el = focusBody();
     if (!el) return;
-    document.execCommand("formatBlock", false, currentBlockTag(el) === tag ? "P" : tag);
+    const align = currentBlockAlign(el);
+    const desired = currentBlockTag(el) === tag ? "P" : tag;
+    // Chromium is more reliable with "<h1>" style values.
+    document.execCommand("formatBlock", false, `<${desired.toLowerCase()}>`);
+    if (align) applyAlignToSelection(el, align);
     scheduleSave();
   };
 
   const applyAlign = (align: "left" | "center" | "right") => {
-    if (!focusBody()) return;
-    const cmd = align === "left" ? "justifyLeft" : align === "center" ? "justifyCenter" : "justifyRight";
-    document.execCommand(cmd);
+    const root = focusBody();
+    if (!root) return;
+    applyAlignToSelection(root, align);
     setCurrentAlign(align);
     setAlignMenuOpen(false);
     scheduleSave();
@@ -419,6 +487,8 @@ function App() {
       if (!anchor) return;
       const anchorEl = anchor instanceof HTMLElement ? anchor : anchor.parentElement;
       if (!anchorEl || !root.contains(anchorEl)) return;
+      // Cache range so toolbar operations don't lose the current selection.
+      lastEditorRange.current = sel.getRangeAt(0).cloneRange();
       const align = currentBlockAlign(root);
       if (align) setCurrentAlign(align);
     };
