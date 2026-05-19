@@ -1,7 +1,23 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { openDb, listNotes, getNote, createNote, updateNote, deleteNote, searchNotes } from "./db";
+import {
+  createAutomaticBackup,
+  createManualBackup,
+  createSafetyBackup,
+  getBackupInfo,
+  readBackup,
+} from "./backup";
+import {
+  openDb,
+  listNotes,
+  getNote,
+  createNote,
+  updateNote,
+  deleteNote,
+  replaceNotes,
+  searchNotes,
+} from "./db";
 import { loadWindowBounds, trackWindowBounds } from "./window-state";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,8 +53,11 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  const dbPath = path.join(app.getPath("userData"), "mendeleev.db");
+  const userDataPath = app.getPath("userData");
+  const dbPath = path.join(userDataPath, "mendeleev.db");
+  const backupDir = path.join(userDataPath, "backups");
   openDb(dbPath);
+  createAutomaticBackup(backupDir, listNotes());
 
   ipcMain.handle("notes:list", () => listNotes());
   ipcMain.handle("notes:get", (_e, id: string) => getNote(id));
@@ -46,6 +65,28 @@ app.whenReady().then(() => {
   ipcMain.handle("notes:update", (_e, id: string, content: string) => updateNote(id, content));
   ipcMain.handle("notes:delete", (_e, id: string) => deleteNote(id));
   ipcMain.handle("notes:search", (_e, query: string) => searchNotes(query));
+  ipcMain.handle("backups:info", () => getBackupInfo(backupDir));
+  ipcMain.handle("backups:export", async () => {
+    const result = await dialog.showSaveDialog(win ?? undefined, {
+      title: "Export Notes Backup",
+      defaultPath: `mendeleev-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      filters: [{ name: "Mendeleev Backup", extensions: ["json"] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    return createManualBackup(result.filePath, listNotes());
+  });
+  ipcMain.handle("backups:restore", async () => {
+    const result = await dialog.showOpenDialog(win ?? undefined, {
+      title: "Restore Notes Backup",
+      properties: ["openFile"],
+      filters: [{ name: "Mendeleev Backup", extensions: ["json"] }],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const notes = readBackup(result.filePaths[0]);
+    createSafetyBackup(backupDir, listNotes());
+    replaceNotes(notes);
+    return { path: result.filePaths[0], noteCount: notes.length, createdAt: new Date().toISOString() };
+  });
 
   createWindow();
 
