@@ -22,6 +22,10 @@ export function openDb(dbPath: string) {
   `);
 }
 
+export function closeDb() {
+  db.close();
+}
+
 const deriveTitle = (content: string) =>
   (content.split("\n", 1)[0] ?? "").trim().slice(0, 120);
 
@@ -68,6 +72,19 @@ export function updateNote(id: string, content: string): Note {
 
 export function deleteNote(id: string): void {
   db.prepare("DELETE FROM notes WHERE id = ?").run(id);
+}
+
+export function replaceNotes(notes: Note[]): void {
+  const replace = db.transaction((nextNotes: Note[]) => {
+    db.prepare("DELETE FROM notes").run();
+    const insert = db.prepare(
+      "INSERT INTO notes (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+    );
+    for (const note of nextNotes) {
+      insert.run(note.id, note.title, note.content, note.created_at, note.updated_at);
+    }
+  });
+  replace(notes);
 }
 
 export function searchNotes(query: string): Note[] {
