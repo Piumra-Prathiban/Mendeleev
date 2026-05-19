@@ -2,9 +2,105 @@
 const electron = require("electron");
 const path = require("node:path");
 const node_url = require("node:url");
+const fs = require("node:fs");
 const Database = require("better-sqlite3");
 const node_crypto = require("node:crypto");
-const fs = require("node:fs");
+const BACKUP_VERSION = 1;
+const AUTO_BACKUP_LIMIT = 14;
+const pad = (value) => String(value).padStart(2, "0");
+function timestamp(date = /* @__PURE__ */ new Date()) {
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    "-",
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds())
+  ].join("");
+}
+function dateStamp(date = /* @__PURE__ */ new Date()) {
+  return [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join("-");
+}
+function ensureJsonPath(filePath) {
+  return filePath.toLowerCase().endsWith(".json") ? filePath : `${filePath}.json`;
+}
+function writeBackup(filePath, notes) {
+  const createdAt = (/* @__PURE__ */ new Date()).toISOString();
+  const payload = {
+    app: "Mendeleev",
+    version: BACKUP_VERSION,
+    createdAt,
+    notes
+  };
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const tempPath = `${filePath}.tmp`;
+  fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2), "utf8");
+  fs.renameSync(tempPath, filePath);
+  return { path: filePath, noteCount: notes.length, createdAt };
+}
+function backupSummary(filePath) {
+  try {
+    const raw = fs.readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.notes) || typeof parsed.createdAt !== "string") return null;
+    return { path: filePath, noteCount: parsed.notes.length, createdAt: parsed.createdAt };
+  } catch {
+    return null;
+  }
+}
+function listBackupFiles(backupDir) {
+  if (!fs.existsSync(backupDir)) return [];
+  return fs.readdirSync(backupDir).filter((name) => name.endsWith(".json")).map((name) => path.join(backupDir, name)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+}
+function pruneAutomaticBackups(backupDir) {
+  const files = listBackupFiles(backupDir).filter(
+    (filePath) => path.basename(filePath).startsWith("mendeleev-auto-")
+  );
+  for (const filePath of files.slice(AUTO_BACKUP_LIMIT)) {
+    fs.unlinkSync(filePath);
+  }
+}
+function validateNote(value) {
+  if (!value || typeof value !== "object") throw new Error("Backup contains an invalid note.");
+  const note = value;
+  if (typeof note.id !== "string" || typeof note.title !== "string" || typeof note.content !== "string" || typeof note.created_at !== "number" || typeof note.updated_at !== "number") {
+    throw new Error("Backup contains an invalid note.");
+  }
+  return {
+    id: note.id,
+    title: note.title,
+    content: note.content,
+    created_at: note.created_at,
+    updated_at: note.updated_at
+  };
+}
+function createManualBackup(filePath, notes) {
+  return writeBackup(ensureJsonPath(filePath), notes);
+}
+function createAutomaticBackup(backupDir, notes) {
+  const filePath = path.join(backupDir, `mendeleev-auto-${dateStamp()}.json`);
+  if (fs.existsSync(filePath)) return backupSummary(filePath);
+  const result = writeBackup(filePath, notes);
+  pruneAutomaticBackups(backupDir);
+  return result;
+}
+function createSafetyBackup(backupDir, notes) {
+  return writeBackup(path.join(backupDir, `mendeleev-before-restore-${timestamp()}.json`), notes);
+}
+function readBackup(filePath) {
+  const raw = fs.readFileSync(filePath, "utf8");
+  const parsed = JSON.parse(raw);
+  if (parsed.app !== "Mendeleev" || parsed.version !== BACKUP_VERSION) {
+    throw new Error("This is not a supported Mendeleev backup file.");
+  }
+  if (!Array.isArray(parsed.notes)) throw new Error("Backup file does not contain notes.");
+  return parsed.notes.map(validateNote);
+}
+function getBackupInfo(backupDir) {
+  const latestBackup = listBackupFiles(backupDir).map(backupSummary).find((summary) => summary !== null) ?? null;
+  return { backupDir, latestBackup };
+}
 let db;
 function openDb(dbPath) {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -57,6 +153,18 @@ function updateNote(id, content) {
 }
 function deleteNote(id) {
   db.prepare("DELETE FROM notes WHERE id = ?").run(id);
+}
+function replaceNotes(notes) {
+  const replace = db.transaction((nextNotes) => {
+    db.prepare("DELETE FROM notes").run();
+    const insert = db.prepare(
+      "INSERT INTO notes (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+    );
+    for (const note of nextNotes) {
+      insert.run(note.id, note.title, note.content, note.created_at, note.updated_at);
+    }
+  });
+  replace(notes);
 }
 function searchNotes(query) {
   const pattern = `%${query}%`;
@@ -144,14 +252,39 @@ function createWindow() {
   }
 }
 electron.app.whenReady().then(() => {
-  const dbPath = path.join(electron.app.getPath("userData"), "mendeleev.db");
+  const userDataPath = electron.app.getPath("userData");
+  const dbPath = path.join(userDataPath, "mendeleev.db");
+  const backupDir = path.join(userDataPath, "backups");
   openDb(dbPath);
+  createAutomaticBackup(backupDir, listNotes());
   electron.ipcMain.handle("notes:list", () => listNotes());
   electron.ipcMain.handle("notes:get", (_e, id) => getNote(id));
   electron.ipcMain.handle("notes:create", () => createNote());
   electron.ipcMain.handle("notes:update", (_e, id, content) => updateNote(id, content));
   electron.ipcMain.handle("notes:delete", (_e, id) => deleteNote(id));
   electron.ipcMain.handle("notes:search", (_e, query) => searchNotes(query));
+  electron.ipcMain.handle("backups:info", () => getBackupInfo(backupDir));
+  electron.ipcMain.handle("backups:export", async () => {
+    const result = await electron.dialog.showSaveDialog(win ?? void 0, {
+      title: "Export Notes Backup",
+      defaultPath: `mendeleev-backup-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json`,
+      filters: [{ name: "Mendeleev Backup", extensions: ["json"] }]
+    });
+    if (result.canceled || !result.filePath) return null;
+    return createManualBackup(result.filePath, listNotes());
+  });
+  electron.ipcMain.handle("backups:restore", async () => {
+    const result = await electron.dialog.showOpenDialog(win ?? void 0, {
+      title: "Restore Notes Backup",
+      properties: ["openFile"],
+      filters: [{ name: "Mendeleev Backup", extensions: ["json"] }]
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const notes = readBackup(result.filePaths[0]);
+    createSafetyBackup(backupDir, listNotes());
+    replaceNotes(notes);
+    return { path: result.filePaths[0], noteCount: notes.length, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+  });
   createWindow();
   electron.app.on("activate", () => {
     if (electron.BrowserWindow.getAllWindows().length === 0) createWindow();
