@@ -1,8 +1,9 @@
-import type { NotesApi } from "../electron/preload";
+import type { BackupsApi, NotesApi } from "../electron/preload";
 
 declare global {
   interface Window {
     notes: NotesApi;
+    backups: BackupsApi;
   }
 }
 
