@@ -31,6 +31,10 @@ export function useNotes() {
   const refresh = useCallback(async () => {
     const list = await api.listNotes();
     setNotes(list);
+    setSelectedId((current) => {
+      if (current && list.some((note) => note.id === current)) return current;
+      return list[0]?.id ?? null;
+    });
     return list;
   }, []);
 
