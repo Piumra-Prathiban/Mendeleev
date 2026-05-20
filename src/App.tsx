@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNotes } from "./hooks/useNotes";
+import { exportBackup, getBackupInfo, restoreBackup } from "./lib/api";
 import { htmlToText, previewLine } from "./lib/text";
-import type { Note } from "./types";
+import type { BackupInfo, Note } from "./types";
 
 const MIN_SIDEBAR = 180;
 const MAX_SIDEBAR = 600;
@@ -97,11 +98,25 @@ function SettingsPanel({
   settings,
   patch,
   onClose,
+  onBackupRestored,
 }: {
   settings: Settings;
   patch: (p: Partial<Settings>) => void;
   onClose: () => void;
+  onBackupRestored: () => Promise<void>;
 }) {
+  const [backupInfo, setBackupInfo] = useState<BackupInfo | null>(null);
+  const [backupStatus, setBackupStatus] = useState<string>("");
+  const [backupBusy, setBackupBusy] = useState(false);
+
+  const refreshBackupInfo = useCallback(async () => {
+    setBackupInfo(await getBackupInfo());
+  }, []);
+
+  useEffect(() => {
+    refreshBackupInfo();
+  }, [refreshBackupInfo]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -109,6 +124,44 @@ function SettingsPanel({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  const handleExportBackup = async () => {
+    setBackupBusy(true);
+    setBackupStatus("");
+    try {
+      const result = await exportBackup();
+      if (result) {
+        setBackupStatus(`Exported ${result.noteCount} notes.`);
+        await refreshBackupInfo();
+      }
+    } catch (error) {
+      setBackupStatus(error instanceof Error ? error.message : "Backup export failed.");
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const handleRestoreBackup = async () => {
+    if (!window.confirm("Restore this backup? Current notes will be replaced after a safety backup is created.")) {
+      return;
+    }
+    setBackupBusy(true);
+    setBackupStatus("");
+    try {
+      const result = await restoreBackup();
+      if (result) {
+        await onBackupRestored();
+        await refreshBackupInfo();
+        setBackupStatus(`Restored ${result.noteCount} notes.`);
+      }
+    } catch (error) {
+      setBackupStatus(error instanceof Error ? error.message : "Backup restore failed.");
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const latestBackup = backupInfo?.latestBackup;
 
   return (
     <div
@@ -181,7 +234,36 @@ function SettingsPanel({
             />
           </Row>
 
-          <p className="text-xs text-neutral-500 mt-2">More settings coming soon…</p>
+          <div className="pt-3 border-t border-neutral-200 dark:border-neutral-800">
+            <div className="text-sm font-medium">Backups</div>
+            <div className="text-xs text-neutral-500 mt-0.5">
+              Automatic daily backups are kept locally. Restore creates a safety backup first.
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button
+                type="button"
+                disabled={backupBusy}
+                onClick={handleExportBackup}
+                className="text-sm px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500"
+              >
+                Export Backup
+              </button>
+              <button
+                type="button"
+                disabled={backupBusy}
+                onClick={handleRestoreBackup}
+                className="text-sm px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500"
+              >
+                Restore Backup
+              </button>
+            </div>
+            <div className="text-xs text-neutral-500 mt-2 truncate" title={backupInfo?.backupDir}>
+              {latestBackup
+                ? `Latest: ${new Date(latestBackup.createdAt).toLocaleString()} (${latestBackup.noteCount} notes)`
+                : "No backups yet"}
+            </div>
+            {backupStatus && <div className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">{backupStatus}</div>}
+          </div>
         </div>
       </div>
     </div>
@@ -373,6 +455,7 @@ function App() {
     create,
     update,
     remove,
+    refresh,
   } = useNotes();
   const { settings, patch } = useSettings();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -582,6 +665,7 @@ function App() {
           settings={settings}
           patch={patch}
           onClose={() => setSettingsOpen(false)}
+          onBackupRestored={refresh}
         />
       )}
       {!sidebarCollapsed && (
