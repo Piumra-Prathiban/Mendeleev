@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { Note } from "../src/types";
+import type { BackupInfo, BackupResult, Note } from "../src/types";
 
 const api = {
   list: (): Promise<Note[]> => ipcRenderer.invoke("notes:list"),
@@ -11,6 +11,14 @@ const api = {
   search: (query: string): Promise<Note[]> => ipcRenderer.invoke("notes:search", query),
 };
 
+const backups = {
+  info: (): Promise<BackupInfo> => ipcRenderer.invoke("backups:info"),
+  export: (): Promise<BackupResult | null> => ipcRenderer.invoke("backups:export"),
+  restore: (): Promise<BackupResult | null> => ipcRenderer.invoke("backups:restore"),
+};
+
 contextBridge.exposeInMainWorld("notes", api);
+contextBridge.exposeInMainWorld("backups", backups);
 
 export type NotesApi = typeof api;
+export type BackupsApi = typeof backups;
