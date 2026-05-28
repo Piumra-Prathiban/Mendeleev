@@ -1,5 +1,6 @@
 "use strict";
 const electron = require("electron");
+const electronUpdater = require("electron-updater");
 const path = require("node:path");
 const node_url = require("node:url");
 const fs = require("node:fs");
@@ -286,6 +287,20 @@ electron.app.whenReady().then(() => {
     return { path: result.filePaths[0], noteCount: notes.length, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
   });
   createWindow();
+  if (!process.env.ELECTRON_RENDERER_URL) {
+    electronUpdater.autoUpdater.checkForUpdatesAndNotify();
+    electronUpdater.autoUpdater.on("update-downloaded", () => {
+      electron.dialog.showMessageBox({
+        type: "info",
+        title: "Update ready",
+        message: "A new version of Mendeleev has been downloaded. Restart now to install it?",
+        buttons: ["Restart", "Later"],
+        defaultId: 0
+      }).then(({ response }) => {
+        if (response === 0) electronUpdater.autoUpdater.quitAndInstall();
+      });
+    });
+  }
   electron.app.on("activate", () => {
     if (electron.BrowserWindow.getAllWindows().length === 0) createWindow();
   });
