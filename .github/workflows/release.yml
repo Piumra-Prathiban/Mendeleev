@@ -29,7 +29,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
+      - run: Remove-Item package-lock.json -ErrorAction SilentlyContinue; npm install
+        shell: pwsh
       - run: npm run rebuild
       - run: npm run release:win
         env:
