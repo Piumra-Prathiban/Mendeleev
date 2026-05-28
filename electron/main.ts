@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -89,6 +90,25 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+
+  // Check for updates in production (silently downloads, prompts before install)
+  if (!process.env.ELECTRON_RENDERER_URL) {
+    autoUpdater.checkForUpdatesAndNotify();
+
+    autoUpdater.on("update-downloaded", () => {
+      dialog
+        .showMessageBox({
+          type: "info",
+          title: "Update ready",
+          message: "A new version of Mendeleev has been downloaded. Restart now to install it?",
+          buttons: ["Restart", "Later"],
+          defaultId: 0,
+        })
+        .then(({ response }) => {
+          if (response === 0) autoUpdater.quitAndInstall();
+        });
+    });
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
