@@ -344,6 +344,30 @@ function FmtButton({
   );
 }
 
+function ZenIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 14 14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {active ? (
+        // compress: corners pointing inward → exit zen
+        <path d="M5 1v4H1M9 1v4h4M9 13v-4h4M5 13v-4H1" />
+      ) : (
+        // expand: corners pointing outward → enter zen
+        <path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" />
+      )}
+    </svg>
+  );
+}
+
 function confirmDelete(note: Note | undefined) {
   if (!note) return false;
   const label = note.title || "Untitled";
@@ -464,6 +488,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [alignMenuOpen, setAlignMenuOpen] = useState(false);
   const [currentAlign, setCurrentAlign] = useState<"left" | "center" | "right">("left");
+  const [zenMode, setZenMode] = useState(false);
   const [inlineState, setInlineState] = useState({
     bold: false,
     italic: false,
@@ -478,6 +503,7 @@ function App() {
   const bodyRef = useRef<HTMLDivElement>(null);
   const alignMenuRef = useRef<HTMLDivElement>(null);
   const lastEditorRange = useRef<Range | null>(null);
+  const prevSidebarCollapsed = useRef(false);
   const pendingSave = useRef<{ timer: number | null; id: string | null; content: string }>({
     timer: null,
     id: null,
@@ -651,6 +677,24 @@ function App() {
     if (confirmDelete(note)) remove(id);
   };
 
+  const enterZen = useCallback(() => {
+    prevSidebarCollapsed.current = sidebarCollapsed;
+    setSidebarCollapsed(true);
+    setZenMode(true);
+  }, [sidebarCollapsed]);
+
+  const exitZen = useCallback(() => {
+    setSidebarCollapsed(prevSidebarCollapsed.current);
+    setZenMode(false);
+  }, []);
+
+  useEffect(() => {
+    if (!zenMode) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") exitZen(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zenMode, exitZen]);
+
   const onResizeDown = (e: React.MouseEvent) => {
     e.preventDefault();
     dragStart.current = { x: e.clientX, w: sidebarWidth };
@@ -800,16 +844,18 @@ function App() {
         <div
           className={`${sidebarCollapsed ? "pl-20" : "pl-2"} pr-2 py-2 border-b border-neutral-200 dark:border-neutral-800 flex items-center gap-2 [-webkit-app-region:drag]`}
         >
-          <button
-            type="button"
-            onClick={() => setSidebarCollapsed((v) => !v)}
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            aria-expanded={!sidebarCollapsed}
-            className="text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 [-webkit-app-region:no-drag]"
-          >
-            {sidebarCollapsed ? "›" : "‹"}
-          </button>
-          {selected && settings.showFormattingButtons && (
+          {!zenMode && (
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed((v) => !v)}
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-expanded={!sidebarCollapsed}
+              className="text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 [-webkit-app-region:no-drag]"
+            >
+              {sidebarCollapsed ? "›" : "‹"}
+            </button>
+          )}
+          {selected && settings.showFormattingButtons && !zenMode && (
             <div className="flex gap-1 [-webkit-app-region:no-drag]">
               <FmtButton
                 label="Bold"
@@ -894,7 +940,7 @@ function App() {
             </div>
           )}
           {selected && saveStatus !== "idle" && (
-            <span className="ml-auto text-xs text-neutral-400 dark:text-neutral-500 [-webkit-app-region:no-drag]">
+            <span className={`${zenMode ? "" : "ml-auto"} text-xs text-neutral-400 dark:text-neutral-500 [-webkit-app-region:no-drag]`}>
               {saveStatus === "saving"
                 ? "Saving…"
                 : savedSecondsAgo < 5
@@ -904,12 +950,23 @@ function App() {
                     : `Saved ${Math.floor(savedSecondsAgo / 60)}m ago`}
             </span>
           )}
+          {selected && (
+            <button
+              type="button"
+              onClick={zenMode ? exitZen : enterZen}
+              aria-label={zenMode ? "Exit zen mode (Esc)" : "Enter zen mode"}
+              title={zenMode ? "Exit zen mode (Esc)" : "Zen mode"}
+              className="ml-auto w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 [-webkit-app-region:no-drag]"
+            >
+              <ZenIcon active={zenMode} />
+            </button>
+          )}
         </div>
         {selected ? (
           (() => {
             const { title, body } = splitContent(selected.content);
             return (
-              <div className="flex-1 flex flex-col min-h-0">
+              <div className={`flex-1 flex flex-col min-h-0 ${zenMode ? "items-center overflow-auto" : ""}`}>
                 <input
                   key={`${selected.id}-title`}
                   ref={titleRef}
@@ -929,7 +986,11 @@ function App() {
                   }}
                   onBlur={flushSave}
                   placeholder="Title"
-                  className="px-4 pt-4 pb-2 text-2xl font-semibold outline-none bg-transparent"
+                  className={
+                    zenMode
+                      ? "w-full max-w-2xl px-10 pt-16 pb-3 text-2xl font-semibold outline-none bg-transparent"
+                      : "px-4 pt-4 pb-2 text-2xl font-semibold outline-none bg-transparent"
+                  }
                 />
                 <div
                   key={`${selected.id}-body`}
@@ -950,7 +1011,11 @@ function App() {
                     const text = e.clipboardData.getData("text/plain");
                     document.execCommand("insertText", false, text);
                   }}
-                  className="editor-body flex-1 w-full overflow-auto px-4 pb-4 outline-none bg-transparent text-base whitespace-pre-wrap"
+                  className={
+                    zenMode
+                      ? "editor-body w-full max-w-2xl px-10 pb-24 outline-none bg-transparent text-base whitespace-pre-wrap"
+                      : "editor-body flex-1 w-full overflow-auto px-4 pb-4 outline-none bg-transparent text-base whitespace-pre-wrap"
+                  }
                 />
               </div>
             );
