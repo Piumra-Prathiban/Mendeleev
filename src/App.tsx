@@ -470,6 +470,9 @@ function App() {
     underline: false,
     strikeThrough: false,
   });
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [savedSecondsAgo, setSavedSecondsAgo] = useState(0);
+  const lastSavedAt = useRef<number | null>(null);
   const dragStart = useRef<{ x: number; w: number } | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -491,7 +494,10 @@ function App() {
     const id = p.id;
     const content = p.content;
     p.id = null;
-    update(id, content);
+    update(id, content).then(() => {
+      lastSavedAt.current = Date.now();
+      setSaveStatus("saved");
+    });
   }, [update]);
 
   const scheduleSave = useCallback(() => {
@@ -503,13 +509,28 @@ function App() {
     p.id = selected.id;
     p.content = content;
     if (p.timer !== null) clearTimeout(p.timer);
+    setSaveStatus("saving");
     p.timer = window.setTimeout(flushSave, SAVE_DEBOUNCE_MS);
   }, [selected, flushSave]);
 
   // Flush pending save when switching notes (cleanup runs before next selected.id renders).
   useEffect(() => {
+    setSaveStatus("idle");
+    lastSavedAt.current = null;
     return () => flushSave();
   }, [selected?.id, flushSave]);
+
+  useEffect(() => {
+    if (saveStatus !== "saved") return;
+    const tick = () => {
+      if (lastSavedAt.current !== null) {
+        setSavedSecondsAgo(Math.floor((Date.now() - lastSavedAt.current) / 1000));
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [saveStatus]);
 
   const focusBody = () => {
     const el = bodyRef.current;
@@ -777,7 +798,7 @@ function App() {
       )}
       <main aria-label="Editor" className="flex-1 flex flex-col min-w-0">
         <div
-          className={`${sidebarCollapsed ? "pl-20" : "pl-2"} pr-2 py-2 border-b border-neutral-200 dark:border-neutral-800 flex gap-2 [-webkit-app-region:drag]`}
+          className={`${sidebarCollapsed ? "pl-20" : "pl-2"} pr-2 py-2 border-b border-neutral-200 dark:border-neutral-800 flex items-center gap-2 [-webkit-app-region:drag]`}
         >
           <button
             type="button"
@@ -871,6 +892,17 @@ function App() {
                 )}
               </div>
             </div>
+          )}
+          {selected && saveStatus !== "idle" && (
+            <span className="ml-auto text-xs text-neutral-400 dark:text-neutral-500 [-webkit-app-region:no-drag]">
+              {saveStatus === "saving"
+                ? "Saving…"
+                : savedSecondsAgo < 5
+                  ? "Saved just now"
+                  : savedSecondsAgo < 60
+                    ? `Saved ${savedSecondsAgo}s ago`
+                    : `Saved ${Math.floor(savedSecondsAgo / 60)}m ago`}
+            </span>
           )}
         </div>
         {selected ? (
