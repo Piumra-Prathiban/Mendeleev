@@ -344,6 +344,25 @@ function FmtButton({
   );
 }
 
+function PinIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 16 16"
+      fill={active ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <line x1="8" y1="10" x2="8" y2="15" />
+      <path d="M5 10h6V7l2-5H3l2 5v3z" />
+    </svg>
+  );
+}
+
 function ZenIcon({ active }: { active: boolean }) {
   return (
     <svg
@@ -480,6 +499,8 @@ function App() {
     update,
     remove,
     refresh,
+    pinnedIds,
+    togglePin,
   } = useNotes();
   const { settings, patch } = useSettings();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -795,24 +816,48 @@ function App() {
                 const newlineAt = n.content.indexOf("\n");
                 const body = newlineAt === -1 ? "" : n.content.slice(newlineAt + 1);
                 const preview = previewLine(body, 80);
+                const isPinned = pinnedIds.has(n.id);
                 return (
                   <li key={n.id} className="group relative">
                     <button
                       type="button"
                       onClick={() => select(n.id)}
                       aria-current={n.id === selectedId ? "true" : undefined}
-                      className={`w-full text-left pl-3 pr-9 py-2 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 ${
+                      className={`w-full text-left pl-3 pr-16 py-2 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 ${
                         n.id === selectedId
                           ? "bg-neutral-200 dark:bg-neutral-800"
                           : "hover:bg-neutral-100 dark:hover:bg-neutral-900"
                       }`}
                     >
-                      <div className="text-base font-medium truncate">{displayTitle}</div>
+                      <div className="text-base font-medium truncate flex items-center gap-1">
+                        {isPinned && (
+                          <span className="shrink-0 text-neutral-400 dark:text-neutral-500">
+                            <PinIcon active={true} />
+                          </span>
+                        )}
+                        {displayTitle}
+                      </div>
                       {preview && (
                         <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
                           {preview}
                         </div>
                       )}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={isPinned ? `Unpin ${displayTitle}` : `Pin ${displayTitle}`}
+                      title={isPinned ? "Unpin" : "Pin to top"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        togglePin(n.id);
+                      }}
+                      className={`absolute right-9 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 transition-opacity duration-150 ${
+                        isPinned
+                          ? "opacity-100 text-neutral-600 dark:text-neutral-400"
+                          : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+                      }`}
+                    >
+                      <PinIcon active={isPinned} />
                     </button>
                     <button
                       type="button"
