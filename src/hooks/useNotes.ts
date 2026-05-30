@@ -6,6 +6,22 @@ import { htmlToText } from "../lib/text";
 const byUpdatedDesc = (a: Note, b: Note) => b.updated_at - a.updated_at;
 
 const LAST_SELECTED_KEY = "mendeleev:lastSelectedId";
+const PINNED_KEY = "mendeleev:pinnedIds";
+
+function readPinned(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PINNED_KEY);
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function writePinned(ids: Set<string>) {
+  try {
+    localStorage.setItem(PINNED_KEY, JSON.stringify([...ids]));
+  } catch {}
+}
 
 function readLastSelected(): string | null {
   try {
@@ -27,6 +43,17 @@ export function useNotes() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => readPinned());
+
+  const togglePin = useCallback((id: string) => {
+    setPinnedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      writePinned(next);
+      return next;
+    });
+  }, []);
 
   const refresh = useCallback(async () => {
     const list = await api.listNotes();
@@ -96,12 +123,19 @@ export function useNotes() {
 
   const filteredNotes = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return notes;
-    return notes.filter((n) => {
-      const hay = (htmlToText(n.title) + " " + htmlToText(n.content)).toLowerCase();
-      return hay.includes(q);
+    const result = q
+      ? notes.filter((n) => {
+          const hay = (htmlToText(n.title) + " " + htmlToText(n.content)).toLowerCase();
+          return hay.includes(q);
+        })
+      : notes;
+    return [...result].sort((a, b) => {
+      const ap = pinnedIds.has(a.id) ? 1 : 0;
+      const bp = pinnedIds.has(b.id) ? 1 : 0;
+      if (ap !== bp) return bp - ap;
+      return b.updated_at - a.updated_at;
     });
-  }, [notes, query]);
+  }, [notes, query, pinnedIds]);
 
   useEffect(() => {
     if (selectedId && !filteredNotes.some((n) => n.id === selectedId)) {
@@ -122,5 +156,7 @@ export function useNotes() {
     update,
     remove,
     refresh,
+    pinnedIds,
+    togglePin,
   };
 }
