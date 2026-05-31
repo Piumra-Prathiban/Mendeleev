@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNotes } from "./hooks/useNotes";
-import { exportBackup, getBackupInfo, restoreBackup } from "./lib/api";
+import { emptyTrash, exportBackup, getBackupInfo, listTrashedNotes, permanentDeleteNote, restoreBackup, restoreNote } from "./lib/api";
 import { htmlToText, previewLine } from "./lib/text";
-import type { BackupInfo, Note } from "./types";
+import type { BackupInfo, TrashedNote } from "./types";
 
 const MIN_SIDEBAR = 180;
 const MAX_SIDEBAR = 600;
@@ -363,6 +363,26 @@ function PinIcon({ active }: { active: boolean }) {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg
+      width="12"
+      height="13"
+      viewBox="0 0 12 13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M1 3h10M4 3V2h4v1M2 3l.7 8.5A1 1 0 003.7 12h4.6a1 1 0 001-.5L10 3" />
+      <line x1="4.5" y1="5.5" x2="4.5" y2="9.5" />
+      <line x1="7.5" y1="5.5" x2="7.5" y2="9.5" />
+    </svg>
+  );
+}
+
 function ZenIcon({ active }: { active: boolean }) {
   return (
     <svg
@@ -387,10 +407,138 @@ function ZenIcon({ active }: { active: boolean }) {
   );
 }
 
-function confirmDelete(note: Note | undefined) {
-  if (!note) return false;
-  const label = note.title || "Untitled";
-  return window.confirm(`Delete "${label}"? This cannot be undone.`);
+function TrashPanel({
+  onClose,
+  onRestored,
+}: {
+  onClose: () => void;
+  onRestored: () => Promise<void>;
+}) {
+  const [trashed, setTrashed] = useState<TrashedNote[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setTrashed(await listTrashedNotes());
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const handleRestore = async (id: string) => {
+    setBusy(true);
+    try {
+      await restoreNote(id);
+      await onRestored();
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handlePermanentDelete = async (id: string) => {
+    if (!window.confirm("Permanently delete this note? This cannot be undone.")) return;
+    setBusy(true);
+    try {
+      await permanentDeleteNote(id);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleEmptyTrash = async () => {
+    if (trashed.length === 0) return;
+    if (!window.confirm(`Permanently delete all ${trashed.length} notes in the trash? This cannot be undone.`)) return;
+    setBusy(true);
+    try {
+      await emptyTrash();
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/30"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Trash"
+        onClick={(e) => e.stopPropagation()}
+        className="w-[480px] max-w-[90vw] max-h-[70vh] rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 shadow-xl flex flex-col"
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-neutral-800 shrink-0">
+          <h2 className="text-base font-semibold">Trash</h2>
+          <div className="flex items-center gap-2">
+            {trashed.length > 0 && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleEmptyTrash}
+                className="text-xs px-2 py-1 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 rounded transition-colors duration-150 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400"
+              >
+                Empty Trash
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close trash"
+              className="w-7 h-7 rounded text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto">
+          {trashed.length === 0 ? (
+            <div className="p-4 text-sm text-neutral-500">Trash is empty</div>
+          ) : (
+            <ul>
+              {trashed.map((n) => {
+                const displayTitle = n.title.trim() || "Untitled";
+                const deletedDate = new Date(n.deleted_at).toLocaleDateString();
+                return (
+                  <li key={n.id} className="flex items-center gap-2 px-4 py-2 border-b border-neutral-100 dark:border-neutral-900 last:border-0">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">{displayTitle}</div>
+                      <div className="text-xs text-neutral-400 dark:text-neutral-500">Deleted {deletedDate}</div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handleRestore(n.id)}
+                      className="shrink-0 text-xs px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400"
+                    >
+                      Restore
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handlePermanentDelete(n.id)}
+                      className="shrink-0 text-xs px-2 py-1 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 rounded transition-colors duration-150 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400"
+                    >
+                      Delete Forever
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function splitContent(content: string) {
@@ -487,7 +635,6 @@ function applyAlignToSelection(root: HTMLElement, align: "left" | "center" | "ri
 
 function App() {
   const {
-    notes,
     filteredNotes,
     query,
     setQuery,
@@ -507,6 +654,7 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [splashDone, setSplashDone] = useState(!settings.splashEnabled);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
   const [alignMenuOpen, setAlignMenuOpen] = useState(false);
   const [currentAlign, setCurrentAlign] = useState<"left" | "center" | "right">("left");
   const [zenMode, setZenMode] = useState(false);
@@ -694,8 +842,7 @@ function App() {
   }, [alignMenuOpen]);
 
   const handleRemove = (id: string) => {
-    const note = notes.find((n) => n.id === id);
-    if (confirmDelete(note)) remove(id);
+    if (window.confirm("This note will be moved to Trash. Proceed?")) remove(id);
   };
 
   const enterZen = useCallback(() => {
@@ -751,7 +898,13 @@ function App() {
           settings={settings}
           patch={patch}
           onClose={() => setSettingsOpen(false)}
-          onBackupRestored={refresh}
+          onBackupRestored={async () => { await refresh(); }}
+        />
+      )}
+      {trashOpen && (
+        <TrashPanel
+          onClose={() => setTrashOpen(false)}
+          onRestored={async () => { await refresh(); }}
         />
       )}
       {!sidebarCollapsed && (
@@ -778,6 +931,15 @@ function App() {
                   Delete
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => setTrashOpen(true)}
+                aria-label="Open trash"
+                title="Trash"
+                className="text-sm w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 [-webkit-app-region:no-drag]"
+              >
+                <TrashIcon />
+              </button>
               <button
                 type="button"
                 onClick={() => setSettingsOpen(true)}

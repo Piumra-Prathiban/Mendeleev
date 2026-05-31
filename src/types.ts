@@ -6,6 +6,8 @@ export type Note = {
   updated_at: number;
 };
 
+export type TrashedNote = Note & { deleted_at: number };
+
 export type BackupResult = {
   path: string;
   noteCount: number;

@@ -18,6 +18,10 @@ import {
   deleteNote,
   replaceNotes,
   searchNotes,
+  listTrashedNotes,
+  restoreNote,
+  permanentDeleteNote,
+  emptyTrash,
 } from "./db";
 import { loadWindowBounds, trackWindowBounds } from "./window-state";
 
@@ -66,6 +70,10 @@ app.whenReady().then(() => {
   ipcMain.handle("notes:update", (_e, id: string, content: string) => updateNote(id, content));
   ipcMain.handle("notes:delete", (_e, id: string) => deleteNote(id));
   ipcMain.handle("notes:search", (_e, query: string) => searchNotes(query));
+  ipcMain.handle("notes:trash-list", () => listTrashedNotes());
+  ipcMain.handle("notes:restore", (_e, id: string) => restoreNote(id));
+  ipcMain.handle("notes:permanent-delete", (_e, id: string) => permanentDeleteNote(id));
+  ipcMain.handle("notes:empty-trash", () => emptyTrash());
   ipcMain.handle("backups:info", () => getBackupInfo(backupDir));
   ipcMain.handle("backups:export", async () => {
     const result = await dialog.showSaveDialog(win ?? undefined, {

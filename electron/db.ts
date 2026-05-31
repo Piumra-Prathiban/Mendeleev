@@ -20,6 +20,9 @@ export function openDb(dbPath: string) {
     );
     CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON notes(updated_at DESC);
   `);
+  try {
+    db.exec("ALTER TABLE notes ADD COLUMN deleted_at INTEGER");
+  } catch {}
 }
 
 export function closeDb() {
@@ -31,13 +34,13 @@ const deriveTitle = (content: string) =>
 
 export function listNotes(): Note[] {
   return db
-    .prepare("SELECT id, title, content, created_at, updated_at FROM notes ORDER BY updated_at DESC")
+    .prepare("SELECT id, title, content, created_at, updated_at FROM notes WHERE deleted_at IS NULL ORDER BY updated_at DESC")
     .all() as Note[];
 }
 
 export function getNote(id: string): Note | null {
   return (db
-    .prepare("SELECT id, title, content, created_at, updated_at FROM notes WHERE id = ?")
+    .prepare("SELECT id, title, content, created_at, updated_at FROM notes WHERE id = ? AND deleted_at IS NULL")
     .get(id) as Note | undefined) ?? null;
 }
 
@@ -71,7 +74,25 @@ export function updateNote(id: string, content: string): Note {
 }
 
 export function deleteNote(id: string): void {
+  db.prepare("UPDATE notes SET deleted_at = ? WHERE id = ?").run(Date.now(), id);
+}
+
+export function listTrashedNotes(): (Note & { deleted_at: number })[] {
+  return db
+    .prepare("SELECT id, title, content, created_at, updated_at, deleted_at FROM notes WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
+    .all() as (Note & { deleted_at: number })[];
+}
+
+export function restoreNote(id: string): void {
+  db.prepare("UPDATE notes SET deleted_at = NULL WHERE id = ?").run(id);
+}
+
+export function permanentDeleteNote(id: string): void {
   db.prepare("DELETE FROM notes WHERE id = ?").run(id);
+}
+
+export function emptyTrash(): void {
+  db.prepare("DELETE FROM notes WHERE deleted_at IS NOT NULL").run();
 }
 
 export function replaceNotes(notes: Note[]): void {
@@ -92,7 +113,7 @@ export function searchNotes(query: string): Note[] {
   return db
     .prepare(
       `SELECT id, title, content, created_at, updated_at FROM notes
-       WHERE title LIKE ? OR content LIKE ?
+       WHERE deleted_at IS NULL AND (title LIKE ? OR content LIKE ?)
        ORDER BY updated_at DESC`
     )
     .all(pattern, pattern) as Note[];

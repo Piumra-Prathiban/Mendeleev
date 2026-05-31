@@ -6,7 +6,11 @@ const api = {
   create: () => electron.ipcRenderer.invoke("notes:create"),
   update: (id, content) => electron.ipcRenderer.invoke("notes:update", id, content),
   remove: (id) => electron.ipcRenderer.invoke("notes:delete", id),
-  search: (query) => electron.ipcRenderer.invoke("notes:search", query)
+  search: (query) => electron.ipcRenderer.invoke("notes:search", query),
+  trashList: () => electron.ipcRenderer.invoke("notes:trash-list"),
+  restore: (id) => electron.ipcRenderer.invoke("notes:restore", id),
+  permanentDelete: (id) => electron.ipcRenderer.invoke("notes:permanent-delete", id),
+  emptyTrash: () => electron.ipcRenderer.invoke("notes:empty-trash")
 };
 const backups = {
   info: () => electron.ipcRenderer.invoke("backups:info"),

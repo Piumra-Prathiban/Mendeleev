@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { BackupInfo, BackupResult, Note } from "../src/types";
+import type { BackupInfo, BackupResult, Note, TrashedNote } from "../src/types";
 
 const api = {
   list: (): Promise<Note[]> => ipcRenderer.invoke("notes:list"),
@@ -9,6 +9,10 @@ const api = {
     ipcRenderer.invoke("notes:update", id, content),
   remove: (id: string): Promise<void> => ipcRenderer.invoke("notes:delete", id),
   search: (query: string): Promise<Note[]> => ipcRenderer.invoke("notes:search", query),
+  trashList: (): Promise<TrashedNote[]> => ipcRenderer.invoke("notes:trash-list"),
+  restore: (id: string): Promise<void> => ipcRenderer.invoke("notes:restore", id),
+  permanentDelete: (id: string): Promise<void> => ipcRenderer.invoke("notes:permanent-delete", id),
+  emptyTrash: (): Promise<void> => ipcRenderer.invoke("notes:empty-trash"),
 };
 
 const backups = {

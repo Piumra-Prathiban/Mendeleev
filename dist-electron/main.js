@@ -117,13 +117,17 @@ function openDb(dbPath) {
     );
     CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON notes(updated_at DESC);
   `);
+  try {
+    db.exec("ALTER TABLE notes ADD COLUMN deleted_at INTEGER");
+  } catch {
+  }
 }
 const deriveTitle = (content) => (content.split("\n", 1)[0] ?? "").trim().slice(0, 120);
 function listNotes() {
-  return db.prepare("SELECT id, title, content, created_at, updated_at FROM notes ORDER BY updated_at DESC").all();
+  return db.prepare("SELECT id, title, content, created_at, updated_at FROM notes WHERE deleted_at IS NULL ORDER BY updated_at DESC").all();
 }
 function getNote(id) {
-  return db.prepare("SELECT id, title, content, created_at, updated_at FROM notes WHERE id = ?").get(id) ?? null;
+  return db.prepare("SELECT id, title, content, created_at, updated_at FROM notes WHERE id = ? AND deleted_at IS NULL").get(id) ?? null;
 }
 function createNote() {
   const now = Date.now();
@@ -153,7 +157,19 @@ function updateNote(id, content) {
   return note;
 }
 function deleteNote(id) {
+  db.prepare("UPDATE notes SET deleted_at = ? WHERE id = ?").run(Date.now(), id);
+}
+function listTrashedNotes() {
+  return db.prepare("SELECT id, title, content, created_at, updated_at, deleted_at FROM notes WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC").all();
+}
+function restoreNote(id) {
+  db.prepare("UPDATE notes SET deleted_at = NULL WHERE id = ?").run(id);
+}
+function permanentDeleteNote(id) {
   db.prepare("DELETE FROM notes WHERE id = ?").run(id);
+}
+function emptyTrash() {
+  db.prepare("DELETE FROM notes WHERE deleted_at IS NOT NULL").run();
 }
 function replaceNotes(notes) {
   const replace = db.transaction((nextNotes) => {
@@ -171,7 +187,7 @@ function searchNotes(query) {
   const pattern = `%${query}%`;
   return db.prepare(
     `SELECT id, title, content, created_at, updated_at FROM notes
-       WHERE title LIKE ? OR content LIKE ?
+       WHERE deleted_at IS NULL AND (title LIKE ? OR content LIKE ?)
        ORDER BY updated_at DESC`
   ).all(pattern, pattern);
 }
@@ -264,6 +280,10 @@ electron.app.whenReady().then(() => {
   electron.ipcMain.handle("notes:update", (_e, id, content) => updateNote(id, content));
   electron.ipcMain.handle("notes:delete", (_e, id) => deleteNote(id));
   electron.ipcMain.handle("notes:search", (_e, query) => searchNotes(query));
+  electron.ipcMain.handle("notes:trash-list", () => listTrashedNotes());
+  electron.ipcMain.handle("notes:restore", (_e, id) => restoreNote(id));
+  electron.ipcMain.handle("notes:permanent-delete", (_e, id) => permanentDeleteNote(id));
+  electron.ipcMain.handle("notes:empty-trash", () => emptyTrash());
   electron.ipcMain.handle("backups:info", () => getBackupInfo(backupDir));
   electron.ipcMain.handle("backups:export", async () => {
     const result = await electron.dialog.showSaveDialog(win ?? void 0, {
