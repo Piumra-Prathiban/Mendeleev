@@ -1004,6 +1004,9 @@ function App() {
                           {preview}
                         </div>
                       )}
+                      <div className="text-xs text-neutral-400 dark:text-neutral-600 mt-0.5">
+                        {new Date(n.created_at).toLocaleDateString()}
+                      </div>
                     </button>
                     <button
                       type="button"
