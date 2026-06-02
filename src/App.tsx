@@ -383,6 +383,25 @@ function TrashIcon() {
   );
 }
 
+function SearchIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 14 14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="5.5" cy="5.5" r="4" />
+      <line x1="8.8" y1="8.8" x2="13" y2="13" />
+    </svg>
+  );
+}
+
 function ZenIcon({ active }: { active: boolean }) {
   return (
     <svg
@@ -666,11 +685,15 @@ function App() {
   });
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [savedSecondsAgo, setSavedSecondsAgo] = useState(0);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findMatchCount, setFindMatchCount] = useState(0);
   const lastSavedAt = useRef<number | null>(null);
   const dragStart = useRef<{ x: number; w: number } | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const alignMenuRef = useRef<HTMLDivElement>(null);
+  const findInputRef = useRef<HTMLInputElement>(null);
   const lastEditorRange = useRef<Range | null>(null);
   const prevSidebarCollapsed = useRef(false);
   const pendingSave = useRef<{ timer: number | null; id: string | null; content: string }>({
@@ -712,6 +735,10 @@ function App() {
   useEffect(() => {
     setSaveStatus("idle");
     lastSavedAt.current = null;
+    setFindOpen(false);
+    setFindQuery("");
+    setFindMatchCount(0);
+    clearFindHighlights();
     return () => flushSave();
   }, [selected?.id, flushSave]);
 
@@ -862,6 +889,105 @@ function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [zenMode, exitZen]);
+
+  const findRangesRef = useRef<Range[]>([]);
+  const findIndexRef = useRef(0);
+
+  const applyFindHighlights = useCallback((ranges: Range[], index: number) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const highlights = (CSS as any).highlights;
+    if (!highlights) return;
+    if (ranges.length === 0) {
+      highlights.delete("find-all");
+      highlights.delete("find-current");
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    highlights.set("find-all", new (window as any).Highlight(...ranges));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    highlights.set("find-current", new (window as any).Highlight(ranges[index]));
+    ranges[index]?.startContainer.parentElement?.scrollIntoView({ block: "nearest" });
+  }, []);
+
+  const buildFindRanges = useCallback((query: string): Range[] => {
+    if (!query) return [];
+    const roots: Node[] = [];
+    if (titleRef.current) roots.push(titleRef.current);
+    if (bodyRef.current) roots.push(bodyRef.current);
+    const q = query.toLowerCase();
+    const result: Range[] = [];
+    for (const root of roots) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let node: Text | null;
+      while ((node = walker.nextNode() as Text | null)) {
+        const text = node.textContent ?? "";
+        const lower = text.toLowerCase();
+        let pos = 0;
+        while ((pos = lower.indexOf(q, pos)) !== -1) {
+          const r = document.createRange();
+          r.setStart(node, pos);
+          r.setEnd(node, pos + q.length);
+          result.push(r);
+          pos += q.length;
+        }
+      }
+    }
+    return result;
+  }, []);
+
+  const runFind = useCallback((query: string, index?: number) => {
+    const ranges = buildFindRanges(query);
+    findRangesRef.current = ranges;
+    const idx = index !== undefined ? index : 0;
+    findIndexRef.current = Math.max(0, Math.min(idx, ranges.length - 1));
+    setFindMatchCount(ranges.length);
+    applyFindHighlights(ranges, findIndexRef.current);
+  }, [buildFindRanges, applyFindHighlights]);
+
+  const clearFindHighlights = useCallback(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const highlights = (CSS as any).highlights;
+    if (!highlights) return;
+    highlights.delete("find-all");
+    highlights.delete("find-current");
+    findRangesRef.current = [];
+    findIndexRef.current = 0;
+  }, []);
+
+  const openFind = useCallback(() => {
+    setFindOpen(true);
+    setTimeout(() => findInputRef.current?.focus(), 0);
+  }, []);
+
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    setFindQuery("");
+    setFindMatchCount(0);
+    clearFindHighlights();
+  }, [clearFindHighlights]);
+
+  const findNext = useCallback((backwards = false) => {
+    const ranges = findRangesRef.current;
+    if (ranges.length === 0) return;
+    const next = backwards
+      ? (findIndexRef.current - 1 + ranges.length) % ranges.length
+      : (findIndexRef.current + 1) % ranges.length;
+    findIndexRef.current = next;
+    applyFindHighlights(ranges, next);
+    findInputRef.current?.focus();
+  }, [applyFindHighlights]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
+        e.preventDefault();
+        openFind();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected, openFind]);
 
   const onResizeDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -1161,17 +1287,83 @@ function App() {
             </span>
           )}
           {selected && (
-            <button
-              type="button"
-              onClick={zenMode ? exitZen : enterZen}
-              aria-label={zenMode ? "Exit zen mode (Esc)" : "Enter zen mode"}
-              title={zenMode ? "Exit zen mode (Esc)" : "Zen mode"}
-              className="ml-auto w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 [-webkit-app-region:no-drag]"
-            >
-              <ZenIcon active={zenMode} />
-            </button>
+            <div className="ml-auto flex items-center gap-1 [-webkit-app-region:no-drag]">
+              <button
+                type="button"
+                onClick={findOpen ? closeFind : openFind}
+                aria-label={findOpen ? "Close find in note" : "Find in note (⌘F)"}
+                title={findOpen ? "Close find in note" : "Find in note (⌘F)"}
+                className={`w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 ${findOpen ? "bg-neutral-200 dark:bg-neutral-800" : ""}`}
+              >
+                <SearchIcon />
+              </button>
+              <button
+                type="button"
+                onClick={zenMode ? exitZen : enterZen}
+                aria-label={zenMode ? "Exit zen mode (Esc)" : "Enter zen mode"}
+                title={zenMode ? "Exit zen mode (Esc)" : "Zen mode"}
+                className="w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500"
+              >
+                <ZenIcon active={zenMode} />
+              </button>
+            </div>
           )}
         </div>
+        {findOpen && selected && (
+          <div className="px-3 py-1.5 border-b border-neutral-200 dark:border-neutral-800 flex items-center gap-2">
+            <input
+              ref={findInputRef}
+              type="text"
+              value={findQuery}
+              onChange={(e) => {
+                const q = e.target.value;
+                setFindQuery(q);
+                if (q) runFind(q, 0);
+                else clearFindHighlights();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.shiftKey ? findNext(true) : findNext(); }
+                if (e.key === "Escape") closeFind();
+              }}
+              placeholder="Find in note…"
+              aria-label="Find in note"
+              className="flex-1 max-w-xs px-2 py-0.5 text-sm bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded outline-none focus:border-neutral-400 dark:focus:border-neutral-600"
+            />
+            {findQuery && (
+              <span className="text-xs text-neutral-400 shrink-0">
+                {findMatchCount > 0 ? `${findMatchCount} match${findMatchCount !== 1 ? "es" : ""}` : "No matches"}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => findNext(true)}
+              aria-label="Previous match"
+              title="Previous match (⇧↵)"
+              disabled={!findQuery || findMatchCount === 0}
+              className="w-6 h-6 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded text-xs transition-colors hover:bg-neutral-200 dark:hover:bg-neutral-800 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              onClick={() => findNext(false)}
+              aria-label="Next match"
+              title="Next match (↵)"
+              disabled={!findQuery || findMatchCount === 0}
+              className="w-6 h-6 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded text-xs transition-colors hover:bg-neutral-200 dark:hover:bg-neutral-800 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400"
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              onClick={closeFind}
+              aria-label="Close find"
+              className="w-6 h-6 flex items-center justify-center text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 rounded hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400"
+            >
+              ×
+            </button>
+          </div>
+        )}
         {selected ? (
           (() => {
             const { title, body } = splitContent(selected.content);
