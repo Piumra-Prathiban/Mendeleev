@@ -76,3 +76,12 @@ body {
   background: var(--color-neutral-600);
   background-clip: padding-box;
 }
+
+::highlight(find-all) {
+  background-color: #facc15;
+  color: #1a1a1a;
+}
+::highlight(find-current) {
+  background-color: #f97316;
+  color: #fff;
+}
