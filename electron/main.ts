@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import fs from "node:fs";
 import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -74,6 +75,17 @@ app.whenReady().then(() => {
   ipcMain.handle("notes:restore", (_e, id: string) => restoreNote(id));
   ipcMain.handle("notes:permanent-delete", (_e, id: string) => permanentDeleteNote(id));
   ipcMain.handle("notes:empty-trash", () => emptyTrash());
+  ipcMain.handle("notes:export-txt", async (_e, title: string, content: string) => {
+    const safeName = (title.trim() || "Untitled").replace(/[/\\:*?"<>|]/g, "-");
+    const result = await dialog.showSaveDialog(win ?? undefined, {
+      title: "Export Note as Text",
+      defaultPath: `${safeName}.txt`,
+      filters: [{ name: "Plain Text", extensions: ["txt"] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    fs.writeFileSync(result.filePath, content, "utf-8");
+    return result.filePath;
+  });
   ipcMain.handle("backups:info", () => getBackupInfo(backupDir));
   ipcMain.handle("backups:export", async () => {
     const result = await dialog.showSaveDialog(win ?? undefined, {
