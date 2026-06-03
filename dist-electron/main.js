@@ -1,9 +1,9 @@
 "use strict";
 const electron = require("electron");
+const fs = require("node:fs");
 const electronUpdater = require("electron-updater");
 const path = require("node:path");
 const node_url = require("node:url");
-const fs = require("node:fs");
 const Database = require("better-sqlite3");
 const node_crypto = require("node:crypto");
 const BACKUP_VERSION = 1;
@@ -284,6 +284,17 @@ electron.app.whenReady().then(() => {
   electron.ipcMain.handle("notes:restore", (_e, id) => restoreNote(id));
   electron.ipcMain.handle("notes:permanent-delete", (_e, id) => permanentDeleteNote(id));
   electron.ipcMain.handle("notes:empty-trash", () => emptyTrash());
+  electron.ipcMain.handle("notes:export-txt", async (_e, title, content) => {
+    const safeName = (title.trim() || "Untitled").replace(/[/\\:*?"<>|]/g, "-");
+    const result = await electron.dialog.showSaveDialog(win ?? void 0, {
+      title: "Export Note as Text",
+      defaultPath: `${safeName}.txt`,
+      filters: [{ name: "Plain Text", extensions: ["txt"] }]
+    });
+    if (result.canceled || !result.filePath) return null;
+    fs.writeFileSync(result.filePath, content, "utf-8");
+    return result.filePath;
+  });
   electron.ipcMain.handle("backups:info", () => getBackupInfo(backupDir));
   electron.ipcMain.handle("backups:export", async () => {
     const result = await electron.dialog.showSaveDialog(win ?? void 0, {

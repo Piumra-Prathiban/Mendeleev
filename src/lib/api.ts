@@ -11,6 +11,8 @@ export const listTrashedNotes = (): Promise<TrashedNote[]> => window.notes.trash
 export const restoreNote = (id: string): Promise<void> => window.notes.restore(id);
 export const permanentDeleteNote = (id: string): Promise<void> => window.notes.permanentDelete(id);
 export const emptyTrash = (): Promise<void> => window.notes.emptyTrash();
+export const exportNoteTxt = (title: string, content: string): Promise<string | null> =>
+  window.notes.exportTxt(title, content);
 export const getBackupInfo = (): Promise<BackupInfo> => window.backups.info();
 export const exportBackup = (): Promise<BackupResult | null> => window.backups.export();
 export const restoreBackup = (): Promise<BackupResult | null> => window.backups.restore();
