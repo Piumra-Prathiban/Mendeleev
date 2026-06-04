@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNotes } from "./hooks/useNotes";
+import { useNotes, type SortBy } from "./hooks/useNotes";
 import { emptyTrash, exportBackup, getBackupInfo, listTrashedNotes, permanentDeleteNote, restoreBackup, restoreNote } from "./lib/api";
 import { htmlToText, previewLine } from "./lib/text";
 import type { BackupInfo, TrashedNote } from "./types";
@@ -667,6 +667,8 @@ function App() {
     refresh,
     pinnedIds,
     togglePin,
+    sortBy,
+    setSortBy,
   } = useNotes();
   const { settings, patch } = useSettings();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -1076,7 +1078,7 @@ function App() {
                 ⚙
               </button>
             </div>
-            <div className="px-2 py-2 border-b border-neutral-200 dark:border-neutral-800">
+            <div className="px-2 py-2 border-b border-neutral-200 dark:border-neutral-800 flex flex-col gap-1.5">
               <input
                 type="search"
                 value={query}
@@ -1091,6 +1093,19 @@ function App() {
                 aria-label="Search notes"
                 className="w-full px-2 py-1 text-sm bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded outline-none transition-colors duration-150 focus:border-neutral-400 dark:focus:border-neutral-600"
               />
+              <div className="flex items-center justify-between px-0.5">
+                <span className="text-xs text-neutral-400 dark:text-neutral-500">Sort</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortBy)}
+                  aria-label="Sort notes by"
+                  className="text-xs bg-transparent border border-neutral-200 dark:border-neutral-800 rounded px-1.5 py-0.5 outline-none transition-colors duration-150 text-neutral-600 dark:text-neutral-400 hover:border-neutral-400 dark:hover:border-neutral-600 focus:border-neutral-400 dark:focus:border-neutral-600 cursor-pointer"
+                >
+                  <option value="modified">Last modified</option>
+                  <option value="created">Date created</option>
+                  <option value="title">Title</option>
+                </select>
+              </div>
             </div>
             <ul className="flex-1 overflow-auto">
               {loading && <li className="p-2 text-sm text-neutral-500">Loading…</li>}
