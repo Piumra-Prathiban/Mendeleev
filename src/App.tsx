@@ -426,6 +426,25 @@ function ZenIcon({ active }: { active: boolean }) {
   );
 }
 
+function ExportTxtIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 14 14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M7 1v8M4 6l3 3 3-3" />
+      <path d="M2 10v2a1 1 0 001 1h8a1 1 0 001-1v-2" />
+    </svg>
+  );
+}
+
 function TrashPanel({
   onClose,
   onRestored,
@@ -874,6 +893,15 @@ function App() {
     if (window.confirm("This note will be moved to Trash. Proceed?")) remove(id);
   };
 
+  const handleExportTxt = async () => {
+    if (!selected) return;
+    const title = titleRef.current?.value ?? "";
+    const bodyHtml = bodyRef.current?.innerHTML ?? "";
+    const bodyText = htmlToText(bodyHtml).replace(/\n{3,}/g, "\n\n").trim();
+    const plain = bodyText ? `${title}\n\n${bodyText}` : title;
+    await exportNoteTxt(title, plain);
+  };
+
   const enterZen = useCallback(() => {
     prevSidebarCollapsed.current = sidebarCollapsed;
     setSidebarCollapsed(true);
@@ -1311,6 +1339,15 @@ function App() {
                 className={`w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 ${findOpen ? "bg-neutral-200 dark:bg-neutral-800" : ""}`}
               >
                 <SearchIcon />
+              </button>
+              <button
+                type="button"
+                onClick={handleExportTxt}
+                aria-label="Export note as .txt"
+                title="Export as .txt"
+                className="w-7 h-7 flex items-center justify-center border border-neutral-300 dark:border-neutral-700 rounded transition-colors duration-150 hover:bg-neutral-200 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500"
+              >
+                <ExportTxtIcon />
               </button>
               <button
                 type="button"

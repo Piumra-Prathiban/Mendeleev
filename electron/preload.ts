@@ -13,6 +13,8 @@ const api = {
   restore: (id: string): Promise<void> => ipcRenderer.invoke("notes:restore", id),
   permanentDelete: (id: string): Promise<void> => ipcRenderer.invoke("notes:permanent-delete", id),
   emptyTrash: (): Promise<void> => ipcRenderer.invoke("notes:empty-trash"),
+  exportTxt: (title: string, content: string): Promise<string | null> =>
+    ipcRenderer.invoke("notes:export-txt", title, content),
 };
 
 const backups = {

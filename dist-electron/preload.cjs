@@ -10,7 +10,8 @@ const api = {
   trashList: () => electron.ipcRenderer.invoke("notes:trash-list"),
   restore: (id) => electron.ipcRenderer.invoke("notes:restore", id),
   permanentDelete: (id) => electron.ipcRenderer.invoke("notes:permanent-delete", id),
-  emptyTrash: () => electron.ipcRenderer.invoke("notes:empty-trash")
+  emptyTrash: () => electron.ipcRenderer.invoke("notes:empty-trash"),
+  exportTxt: (title, content) => electron.ipcRenderer.invoke("notes:export-txt", title, content)
 };
 const backups = {
   info: () => electron.ipcRenderer.invoke("backups:info"),
