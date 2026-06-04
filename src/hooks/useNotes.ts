@@ -7,6 +7,25 @@ const byUpdatedDesc = (a: Note, b: Note) => b.updated_at - a.updated_at;
 
 const LAST_SELECTED_KEY = "mendeleev:lastSelectedId";
 const PINNED_KEY = "mendeleev:pinnedIds";
+const SORT_KEY = "mendeleev:sortBy";
+
+export type SortBy = "modified" | "created" | "title";
+
+function readSort(): SortBy {
+  try {
+    const raw = localStorage.getItem(SORT_KEY);
+    if (raw === "modified" || raw === "created" || raw === "title") return raw;
+    return "modified";
+  } catch {
+    return "modified";
+  }
+}
+
+function writeSort(s: SortBy) {
+  try {
+    localStorage.setItem(SORT_KEY, s);
+  } catch {}
+}
 
 function readPinned(): Set<string> {
   try {
@@ -44,6 +63,12 @@ export function useNotes() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => readPinned());
+  const [sortBy, setSortByState] = useState<SortBy>(readSort);
+
+  const setSortBy = useCallback((s: SortBy) => {
+    setSortByState(s);
+    writeSort(s);
+  }, []);
 
   const togglePin = useCallback((id: string) => {
     setPinnedIds((prev) => {
@@ -133,9 +158,13 @@ export function useNotes() {
       const ap = pinnedIds.has(a.id) ? 1 : 0;
       const bp = pinnedIds.has(b.id) ? 1 : 0;
       if (ap !== bp) return bp - ap;
+      if (sortBy === "title") {
+        return htmlToText(a.title).localeCompare(htmlToText(b.title));
+      }
+      if (sortBy === "created") return b.created_at - a.created_at;
       return b.updated_at - a.updated_at;
     });
-  }, [notes, query, pinnedIds]);
+  }, [notes, query, pinnedIds, sortBy]);
 
   useEffect(() => {
     if (selectedId && !filteredNotes.some((n) => n.id === selectedId)) {
@@ -158,5 +187,7 @@ export function useNotes() {
     refresh,
     pinnedIds,
     togglePin,
+    sortBy,
+    setSortBy,
   };
 }
