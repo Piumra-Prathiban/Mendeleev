@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNotes, type SortBy } from "./hooks/useNotes";
-import { emptyTrash, exportBackup, getBackupInfo, listTrashedNotes, permanentDeleteNote, restoreBackup, restoreNote } from "./lib/api";
+import {
+  emptyTrash,
+  exportBackup,
+  exportNoteTxt,
+  getBackupInfo,
+  listTrashedNotes,
+  permanentDeleteNote,
+  restoreBackup,
+  restoreNote,
+} from "./lib/api";
 import { htmlToText, previewLine } from "./lib/text";
 import type { BackupInfo, TrashedNote } from "./types";
 
@@ -899,7 +908,11 @@ function App() {
     const bodyHtml = bodyRef.current?.innerHTML ?? "";
     const bodyText = htmlToText(bodyHtml).replace(/\n{3,}/g, "\n\n").trim();
     const plain = bodyText ? `${title}\n\n${bodyText}` : title;
-    await exportNoteTxt(title, plain);
+    try {
+      await exportNoteTxt(title, plain);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Export failed.");
+    }
   };
 
   const enterZen = useCallback(() => {
