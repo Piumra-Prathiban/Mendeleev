@@ -3,6 +3,9 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 
+const builtinPattern =
+  /^(electron|electron-updater|sql\.js|node:.+|fs|path|crypto|url|os|stream|events|child_process|http|zlib|util|assert|constants)$/;
+
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
@@ -10,6 +13,8 @@ export default defineConfig({
       outDir: "dist-electron",
       rollupOptions: {
         input: { main: resolve(__dirname, "electron/main.ts") },
+        output: { format: "cjs", entryFileNames: "[name].js" },
+        external: builtinPattern,
       },
     },
   },
@@ -21,6 +26,7 @@ export default defineConfig({
       rollupOptions: {
         input: { preload: resolve(__dirname, "electron/preload.ts") },
         output: { format: "cjs", entryFileNames: "[name].cjs" },
+        external: builtinPattern,
       },
     },
   },

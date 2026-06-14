@@ -2,7 +2,6 @@ import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import fs from "node:fs";
 import { autoUpdater } from "electron-updater";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   createAutomaticBackup,
   createManualBackup,
@@ -25,8 +24,6 @@ import {
   emptyTrash,
 } from "./db";
 import { loadWindowBounds, trackWindowBounds } from "./window-state";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let win: BrowserWindow | null = null;
 
@@ -58,11 +55,11 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const userDataPath = app.getPath("userData");
   const dbPath = path.join(userDataPath, "mendeleev.db");
   const backupDir = path.join(userDataPath, "backups");
-  openDb(dbPath);
+  await openDb(dbPath);
   createAutomaticBackup(backupDir, listNotes());
 
   ipcMain.handle("notes:list", () => listNotes());
